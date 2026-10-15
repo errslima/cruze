@@ -32,6 +32,25 @@ function status(title, detail, label = 'OFFLINE') {
   const waiting = ['WAITING', 'CONNECTING', 'STARTING'].includes(label) || (label === 'CONNECTED' && (ui.remote.readyState < 2 || ui.remote.paused));
   window.cruzeWorld?.show(waiting, label === 'WAITING' ? 'Finding someone' : label === 'STARTING' ? 'Getting your camera ready' : 'Connecting');
 }
+// One short chime per match, so people can wait in another tab. The context is
+// unlocked by the Start click; browsers block audio that no gesture allowed.
+let chimeAudio = null;
+function unlockChime() {
+  try { chimeAudio ??= new AudioContext(); chimeAudio.resume().catch(() => {}); } catch { chimeAudio = null; }
+}
+function chime() {
+  if (!chimeAudio) return;
+  const now = chimeAudio.currentTime;
+  for (const [offset, frequency] of [[0, 660], [.11, 990]]) {
+    const tone = chimeAudio.createOscillator(), gain = chimeAudio.createGain();
+    tone.frequency.value = frequency;
+    gain.gain.setValueAtTime(.0001, now + offset);
+    gain.gain.exponentialRampToValueAtTime(.12, now + offset + .015);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + offset + .28);
+    tone.connect(gain).connect(chimeAudio.destination);
+    tone.start(now + offset); tone.stop(now + offset + .3);
+  }
+}
 function send(data) { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(data)); }
 function closePeer() {
   clearTimeout(timer); peer?.close(); peer = null; matchId = null; peerIp = null; ui.block.disabled = true;
@@ -65,7 +84,7 @@ function fail(message, step = 'setup_error') {
 }
 async function matched(message) {
   closePeer(); matchId = message.matchId; peerIp = message.peerIp;
-  controls();
+  controls(); chime();
   const id = matchId;
   diagnostic('matched', {elapsed_ms: elapsed()}, id);
   const pc = new RTCPeerConnection(rtcConfig); peer = pc;
@@ -154,7 +173,7 @@ async function receive(message) {
 }
 ui.start.onclick = async () => {
   if (!ageConfirmed) { ageGate.showModal(); return; }
-  attemptStarted = performance.now(); diagnostic('start_clicked');
+  attemptStarted = performance.now(); diagnostic('start_clicked'); unlockChime();
   if (!navigator.mediaDevices?.getUserMedia) { diagnostic('media_unsupported'); status('Camera access needs a secure connection.', 'Open this site over HTTPS or localhost.', 'ERROR'); return; }
   const run = ++generation; active = true; controls();
   status('Let’s get your camera ready.', 'Allow camera and microphone access in your browser.', 'STARTING');

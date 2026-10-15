@@ -20,6 +20,7 @@ Open http://localhost:8000 in two separate browser windows, confirm you are 18 o
 - Direct video/audio, local preview, microphone mute, camera toggle.
 - Webcam dropdown beside the camera toggle; switches during a call and remembers the selected device in this browser. Camera names become available after permission is granted.
 - Start/Skip, Stop, disconnect cleanup, and 15-second setup timeout.
+- A short two-tone chime (Web Audio, no sound file) plays once each time a match is made, so people can wait in another tab. Start unlocks the audio; no other sounds or notifications are used.
 - Block with confirmation: excludes the partner’s IP address and stores each block for one year in a browser cookie. Blocks override skip priorities, including when only two users are available. Clearing cookies removes saved blocks; IP changes and shared IP addresses affect who is excluded.
 - Same-origin WebSocket validation, payload limits, and per-socket message/skip limits.
 - Full-screen video with a floating control bar and icon-only camera/microphone toggles.
@@ -37,6 +38,7 @@ uv run python tests/browser_smoke.py
 uv run python tests/block_browser.py
 uv run python tests/playback_regression.py
 uv run python tests/camera_browser.py
+uv run python tests/chime_browser.py
 PYTHONPATH=. uv run python tests/admin_browser.py
 ```
 
