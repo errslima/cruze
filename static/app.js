@@ -1,9 +1,11 @@
 const $ = id => document.getElementById(id);
-const ui = Object.fromEntries(['local','remote','placeholder','status','detail','connection','start','next','stop','mic','camera','play'].map(id => [id, $(id)]));
+const ui = Object.fromEntries(['local','remote','placeholder','status','detail','connection','start','next','block','stop','mic','camera','play'].map(id => [id, $(id)]));
 // Deliberately STUN-only. Never add TURN URLs to this configuration.
 const rtcConfig = {iceServers: [{urls: 'stun:stun.l.google.com:19302'}]};
 let stream, socket, peer, matchId, timer, generation = 0, active = false;
 let pendingCandidates = [];
+let peerIp = null, blockTarget = null;
+const blockDialog = $("block-dialog");
 function status(title, detail, label = 'OFFLINE') {
   ui.status.textContent = title; ui.detail.textContent = detail;
   ui.connection.textContent = label;
@@ -13,15 +15,17 @@ function status(title, detail, label = 'OFFLINE') {
 }
 function send(data) { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(data)); }
 function closePeer() {
-  clearTimeout(timer); peer?.close(); peer = null; matchId = null;
+  clearTimeout(timer); peer?.close(); peer = null; matchId = null; peerIp = null; ui.block.disabled = true;
   pendingCandidates = []; ui.remote.srcObject = null; ui.play.hidden = true;
 }
 function controls() {
   ui.start.hidden = active; ui.next.hidden = !active; ui.next.disabled = !active || socket?.readyState !== WebSocket.OPEN;
+  ui.block.disabled = !active || !peerIp;
   ui.stop.disabled = !active; ui.mic.disabled = ui.camera.disabled = !stream;
   ui.start.disabled = !ageConfirmed;
 }
 function stop() {
+  blockDialog.close(); blockTarget = null;
   generation++; active = false; send({type:'stop'}); closePeer();
   if (socket) { socket.onclose = null; socket.close(); socket = null; }
   stream?.getTracks().forEach(track => track.stop()); stream = null; ui.local.srcObject = null;
@@ -36,7 +40,8 @@ function fail(message) {
   controls();
 }
 async function matched(message) {
-  closePeer(); matchId = message.matchId;
+  closePeer(); matchId = message.matchId; peerIp = message.peerIp;
+  controls();
   const id = matchId, pc = new RTCPeerConnection(rtcConfig); peer = pc;
   status('Making a connection…', 'Trying a direct route between your browsers.', 'CONNECTING');
   stream.getTracks().forEach(track => pc.addTrack(track, stream));
@@ -156,3 +161,42 @@ $('confirm-age').onclick = () => {
 $('leave').onclick = () => { stop(); location.replace('about:blank'); };
 controls();
 if (!ageConfirmed) ageGate.showModal();
+
+function savedBlocks() {
+  try {
+    const value = document.cookie.split(';').map(part => part.trim()).find(part => part.startsWith('cruze_blocks='));
+    const entries = JSON.parse(decodeURIComponent(value?.slice('cruze_blocks='.length) || '{}'));
+    if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return {};
+    return Object.fromEntries(Object.entries(entries).filter(([, expiry]) => Number.isFinite(expiry) && expiry > Date.now()));
+  } catch { return {}; }
+}
+ui.block.onclick = () => {
+  if (!peerIp) return;
+  blockTarget = {ip: peerIp, matchId};
+  $('block-error').hidden = true;
+  blockDialog.showModal();
+};
+$('cancel-block').onclick = () => { blockDialog.close(); blockTarget = null; };
+blockDialog.addEventListener('cancel', () => { blockTarget = null; });
+$('confirm-block').onclick = () => {
+  if (!blockTarget) return;
+  const entries = savedBlocks();
+  entries[blockTarget.ip] = Date.now() + 31536000000;
+  const value = encodeURIComponent(JSON.stringify(entries));
+  const error = $('block-error');
+  if (value.length > 3500) {
+    error.textContent = 'Your saved block list is full. This block could not be saved.';
+    error.hidden = false; return;
+  }
+  document.cookie = `cruze_blocks=${value}; Max-Age=31536000; Path=/; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
+  if (savedBlocks()[blockTarget.ip] !== entries[blockTarget.ip]) {
+    error.textContent = 'Enable cookies to save this block.';
+    error.hidden = false; return;
+  }
+  send({type: 'block', ...blockTarget});
+  // Keep the captured target if the partner skipped while the popup was open.
+  if (peerIp === blockTarget.ip) {
+    closePeer(); status('User blocked.', 'Looking for someone else.', 'WAITING');
+  }
+  blockTarget = null; blockDialog.close();
+};

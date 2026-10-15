@@ -19,6 +19,7 @@ Open http://localhost:8000 in two separate browser windows, confirm you are 18 o
 - Offers, answers, and ICE candidates scoped to a unique match ID.
 - Direct video/audio, local preview, microphone mute, camera toggle.
 - Start/Skip, Stop, disconnect cleanup, and 15-second setup timeout.
+- Block with confirmation: excludes the partner’s IP address and stores each block for one year in a browser cookie. Blocks override skip priorities, including when only two users are available. Clearing cookies removes saved blocks; IP changes and shared IP addresses affect who is excluded.
 - Same-origin WebSocket validation, payload limits, and per-socket message/skip limits.
 - Full-screen video with a floating control bar and icon-only camera/microphone toggles.
 - First-visit 18+ confirmation, remembered in a `cruze_adult` cookie for 365 days (SameSite=Lax; Secure on HTTPS). No camera access until Start is clicked.
@@ -32,6 +33,8 @@ uv run pytest -q
 uv run playwright install chromium
 # With the server running in another terminal:
 uv run python tests/browser_smoke.py
+uv run python tests/block_browser.py
+uv run python tests/playback_regression.py
 ```
 
 Integration tests cover pairing, signaling isolation, skipping, disconnection, origin checks, and asset restrictions. The browser smoke test uses simulated cameras in independent Chromium contexts, checks received video and selected non-relay candidate pairs, controls, cleanup, responsive layout, and connection failure. Screenshots are saved to `/tmp/cruze-desktop.png` and `/tmp/cruze-mobile.png`.

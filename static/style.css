@@ -78,3 +78,19 @@ dialog p { color: #b1b3b5; font-size: 14px; margin: 0 0 28px; }
   .preview { top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); border-radius: 12px; }
 }
 @media (max-width: 350px) { .controls { gap: 5px; } button { padding: 0 12px; } button.primary { min-width: 65px; } }
+
+button.block { color: #ffb7bc; }
+#block-error { color: #ffb7bc; }
+@media (max-width: 480px) {
+  .controls { gap: 5px; padding: 7px; }
+  .controls button { padding: 0 13px; }
+  .controls button.primary { min-width: 64px; }
+  .controls button.toggle { width: 42px; padding: 0; }
+  .divider { margin: 0; }
+}
+@media (max-width: 350px) {
+  .controls { gap: 4px; }
+  .controls button { padding: 0 10px; }
+  .controls button.primary { min-width: 56px; }
+  .controls button.toggle { width: 38px; }
+}

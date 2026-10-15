@@ -141,3 +141,70 @@ async def test_equal_priority_uses_queue_order():
     assert lobby.matches['a'][0] == 'b'
     assert lobby.matches['c'][0] == 'd'
     assert lobby.queue == ['e']
+
+
+@pytest.mark.asyncio
+async def test_block_excludes_pair_and_same_ip_reconnects():
+    lobby = Lobby()
+    lobby.addresses = {'a': '192.0.2.1', 'b': '192.0.2.2', 'c': '192.0.2.3', 'b2': '192.0.2.2'}
+    await lobby.join('a')
+    await lobby.join('b')
+    await lobby.message('a', {'type': 'block', 'ip': '192.0.2.2', 'matchId': lobby.matches['a'][1]})
+    assert not lobby.matches
+    assert set(lobby.queue) == {'a', 'b'}
+    await lobby.leave('b')
+    await lobby.join('b2')
+    assert not lobby.matches
+    await lobby.join('c')
+    assert lobby.matches['a'][0] == 'c'
+    assert lobby.queue == ['b2']
+
+
+@pytest.mark.asyncio
+async def test_stale_block_does_not_end_unrelated_call():
+    lobby = Lobby()
+    lobby.addresses = {'a': '192.0.2.1', 'b': '192.0.2.2', 'c': '192.0.2.3'}
+    await lobby.join('a')
+    await lobby.join('c')
+    current = lobby.matches['a']
+    await lobby.message('a', {'type': 'block', 'ip': '192.0.2.2', 'matchId': 'old'})
+    assert lobby.matches['a'] == current
+    assert '192.0.2.2' in lobby.blocked['a']
+
+
+def test_cookie_expiration_and_proxy_ip_trust(monkeypatch):
+    import time
+    import json
+    from types import SimpleNamespace
+    from urllib.parse import quote
+    from server import cookie_blocks, client_ip, YEAR_MS
+    cookie = quote(json.dumps({'192.0.2.2': time.time() * 1000 + YEAR_MS,
+                               '192.0.2.3': 1}))
+    assert cookie_blocks(cookie) == {'192.0.2.2'}
+    assert cookie_blocks('broken') == set()
+    request = SimpleNamespace(remote='127.0.0.1', headers={'X-Cruze-Client-IP': '::ffff:192.0.2.1'})
+    monkeypatch.delenv('CRUZE_TRUST_PROXY', raising=False)
+    assert client_ip(request) == '127.0.0.1'
+    monkeypatch.setenv('CRUZE_TRUST_PROXY', '1')
+    assert client_ip(request) == '192.0.2.1'
+    request.remote = '192.0.2.4'
+    assert client_ip(request) == '192.0.2.4'
+
+
+@pytest.mark.asyncio
+async def test_cookie_restores_block_after_reconnect(client, monkeypatch):
+    import json
+    import time
+    from urllib.parse import quote
+    monkeypatch.setenv('CRUZE_TRUST_PROXY', '1')
+    origin = str(client.make_url('/')).rstrip('/')
+    cookie = quote(json.dumps({'192.0.2.2': time.time() * 1000 + 31536000000}))
+    a = await client.ws_connect('/ws', headers={'Origin': origin, 'Cookie': f'cruze_blocks={cookie}', 'X-Cruze-Client-IP': '192.0.2.1'})
+    b = await client.ws_connect('/ws', headers={'Origin': origin, 'X-Cruze-Client-IP': '192.0.2.2'})
+    for ws in (a, b):
+        await ws.send_json({'type': 'join'})
+        await receive(ws, 'waiting')
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(a.receive_json(), .1)
+    await a.close()
+    await b.close()

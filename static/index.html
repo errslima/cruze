@@ -15,6 +15,7 @@
     <nav class="controls" aria-label="Call controls">
       <button id="start" class="primary">Start</button>
       <button id="next" class="primary" hidden disabled>Skip</button>
+      <button id="block" class="block" disabled>Block</button>
       <button id="stop" class="stop" disabled>Stop</button>
       <span class="divider" aria-hidden="true"></span>
       <button id="camera" class="toggle" disabled aria-pressed="false" aria-label="Turn camera off" title="Turn camera off">
@@ -25,6 +26,12 @@
       </button>
     </nav>
   </main>
+  <dialog id="block-dialog" aria-labelledby="block-title" aria-describedby="block-description">
+    <h1 id="block-title">Block this user’s IP address?</h1>
+    <p id="block-description">You won’t be matched with this IP address for one year in this browser.</p>
+    <p id="block-error" role="alert" hidden></p>
+    <div class="age-actions"><button id="cancel-block" autofocus>Cancel</button><button id="confirm-block" class="stop">Block</button></div>
+  </dialog>
   <dialog id="age-gate" aria-labelledby="age-title" aria-describedby="age-description">
     <h1 id="age-title">Are you 18 or older?</h1>
     <p id="age-description">You must be at least 18 to enter.</p>

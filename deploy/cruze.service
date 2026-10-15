@@ -7,6 +7,7 @@ Type=simple
 DynamicUser=yes
 WorkingDirectory=/srv/cruze
 ExecStart=/srv/cruze/.venv/bin/python /srv/cruze/server.py
+Environment=CRUZE_TRUST_PROXY=1
 Environment=HOST=127.0.0.1
 Environment=PORT=8774
 Environment=CRUZE_ORIGIN=https://cruze.cc
