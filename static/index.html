@@ -1,24 +1,34 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cruze — meet someone new</title>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cruze</title>
   <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
 </head>
 <body>
-  <header><a class="logo" href="/">cruze<span>↗</span></a><span class="badge">PRIVATE PROTOTYPE · 18+</span></header>
-  <main>
-    <div class="intro"><p class="eyebrow">A NEW FACE. A NEW CONVERSATION.</p><h1>See where it goes.</h1><p>One-to-one video. A little spontaneity.</p></div>
-    <section class="stage" aria-label="Video chat">
-      <video id="remote" autoplay playsinline></video>
-      <div id="placeholder"><div class="orb">↗</div><h2 id="status" role="status" aria-live="polite">Someone new is one click away.</h2><p id="detail">Get comfortable. Turn on your camera when you’re ready.</p></div>
-      <div class="stage-label"><span id="dot"></span><span id="connection">OFFLINE</span></div>
-      <button id="play" hidden>Play partner’s video</button>
-      <div class="preview"><video id="local" autoplay playsinline muted></video><span>You</span></div>
-    </section>
-    <div class="controls"><div class="toggles"><button id="mic" disabled aria-pressed="false">Mute mic</button><button id="camera" disabled aria-pressed="false">Camera off</button></div><div class="actions"><button id="stop" disabled>Stop</button><button id="next" disabled>Next ↗</button><button id="start" class="primary">Start chatting ↗</button></div></div>
-    <label class="consent"><input id="consent" type="checkbox"> I’m 18 or older and understand this is a private test.</label>
-    <footer><span>DIRECT CONNECTION · NO MEDIA RELAY</span><p>Direct calls expose your public connection IP to your partner. Some networks cannot connect. No server recording; partners may still record. This checkbox is not age verification.</p></footer>
+  <main class="stage" aria-label="Video call">
+    <video id="remote" autoplay playsinline></video>
+    <div id="placeholder" data-state="OFFLINE" aria-hidden="true"><span class="indicator"></span></div>
+    <div class="sr-only" role="status" aria-live="polite"><span id="status">Ready</span><span id="detail"></span><span id="connection">OFFLINE</span></div>
+    <button id="play" class="play" aria-label="Play partner’s video" title="Play video" hidden>▶</button>
+    <div class="preview"><video id="local" autoplay playsinline muted></video></div>
+    <nav class="controls" aria-label="Call controls">
+      <button id="start" class="primary">Start</button>
+      <button id="next" class="primary" hidden disabled>Skip</button>
+      <button id="stop" class="stop" disabled>Stop</button>
+      <span class="divider" aria-hidden="true"></span>
+      <button id="camera" class="toggle" disabled aria-pressed="false" aria-label="Turn camera off" title="Turn camera off">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="3"/><path d="m15 10 6-3v10l-6-3"/><path class="slash" d="M3 3 21 21"/></svg>
+      </button>
+      <button id="mic" class="toggle" disabled aria-pressed="false" aria-label="Mute microphone" title="Mute microphone">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/><path class="slash" d="M3 3 21 21"/></svg>
+      </button>
+    </nav>
   </main>
+  <dialog id="age-gate" aria-labelledby="age-title" aria-describedby="age-description">
+    <h1 id="age-title">Are you 18 or older?</h1>
+    <p id="age-description">You must be at least 18 to enter.</p>
+    <div class="age-actions"><button id="leave">Leave</button><button id="confirm-age" class="primary" autofocus>Yes, I’m 18+</button></div>
+  </dialog>
 </body>
 </html>

@@ -17,7 +17,8 @@ class Lobby:
         self.clients = {}
         self.queue = []
         self.matches = {}
-        self.previous = {}
+        self.skipped = {}
+        self.skip_sequence = 0
 
     async def send(self, user, kind, **data):
         socket = self.clients.get(user)
@@ -26,9 +27,12 @@ class Lobby:
 
     async def pair(self):
         while True:
-            pair = next(((a, b) for i, a in enumerate(self.queue)
-                         for b in self.queue[i + 1:]
-                         if self.previous.get(a) != b and self.previous.get(b) != a), None)
+            # Never-skipped pairs rank first, then oldest skips. Iteration
+            # order breaks ties in favor of users who have waited longest.
+            pair = min(((a, b) for i, a in enumerate(self.queue)
+                        for b in self.queue[i + 1:]),
+                       key=lambda pair: self.skipped.get(frozenset(pair), 0),
+                       default=None)
             if pair is None:
                 return
             a, b = pair
@@ -53,10 +57,10 @@ class Lobby:
         if old:
             peer, match = old
             self.matches.pop(peer, None)
-            self.previous[user] = peer
-            self.previous[peer] = user
             await self.send(peer, "peer-left", matchId=match)
-            await self.join(peer)
+            self.queue.append(peer)
+            await self.send(peer, "waiting")
+            # Let the caller enqueue the skipper before choosing any pairs.
 
     async def message(self, user, data):
         kind = data.get("type")
@@ -67,9 +71,14 @@ class Lobby:
             current = self.matches.get(user)
             if data.get("matchId") and (not current or current[1] != data["matchId"]):
                 return
+            if kind == "next" and current:
+                self.skip_sequence += 1
+                self.skipped[frozenset((user, current[0]))] = self.skip_sequence
             await self.leave(user)
             if kind == "next":
                 await self.join(user)
+            else:
+                await self.pair()
         elif kind == "signal":
             current = self.matches.get(user)
             if not current or data.get("matchId") != current[1]:
@@ -138,10 +147,10 @@ def create_app():
             async with lock:
                 await lobby.leave(user)
                 lobby.clients.pop(user, None)
-                lobby.previous.pop(user, None)
-                for key in list(lobby.previous):
-                    if lobby.previous[key] == user:
-                        del lobby.previous[key]
+                for pair in list(lobby.skipped):
+                    if user in pair:
+                        del lobby.skipped[pair]
+                await lobby.pair()
         return ws
 
     async def asset(request):

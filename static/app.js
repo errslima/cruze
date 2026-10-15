@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const ui = Object.fromEntries(['local','remote','placeholder','status','detail','connection','dot','start','next','stop','mic','camera','consent','play'].map(id => [id, $(id)]));
+const ui = Object.fromEntries(['local','remote','placeholder','status','detail','connection','start','next','stop','mic','camera','play'].map(id => [id, $(id)]));
 // Deliberately STUN-only. Never add TURN URLs to this configuration.
 const rtcConfig = {iceServers: [{urls: 'stun:stun.l.google.com:19302'}]};
 let stream, socket, peer, matchId, timer, generation = 0, active = false;
@@ -7,7 +7,8 @@ let pendingCandidates = [];
 function status(title, detail, label = 'OFFLINE') {
   ui.status.textContent = title; ui.detail.textContent = detail;
   ui.connection.textContent = label;
-  ui.dot.classList.toggle('live', label === 'CONNECTED');
+  ui.placeholder.dataset.state = label;
+  ui.placeholder.title = `${title} ${detail}`;
   ui.placeholder.hidden = label === 'CONNECTED';
 }
 function send(data) { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(data)); }
@@ -16,15 +17,16 @@ function closePeer() {
   pendingCandidates = []; ui.remote.srcObject = null; ui.play.hidden = true;
 }
 function controls() {
-  ui.start.hidden = active; ui.next.disabled = !active || socket?.readyState !== WebSocket.OPEN;
+  ui.start.hidden = active; ui.next.hidden = !active; ui.next.disabled = !active || socket?.readyState !== WebSocket.OPEN;
   ui.stop.disabled = !active; ui.mic.disabled = ui.camera.disabled = !stream;
-  ui.consent.disabled = active;
+  ui.start.disabled = !ageConfirmed;
 }
 function stop() {
   generation++; active = false; send({type:'stop'}); closePeer();
   if (socket) { socket.onclose = null; socket.close(); socket = null; }
   stream?.getTracks().forEach(track => track.stop()); stream = null; ui.local.srcObject = null;
-  ui.mic.textContent = 'Mute mic'; ui.camera.textContent = 'Camera off';
+  ui.mic.setAttribute('aria-label', 'Mute microphone'); ui.mic.title = 'Mute microphone';
+  ui.camera.setAttribute('aria-label', 'Turn camera off'); ui.camera.title = 'Turn camera off';
   ui.mic.setAttribute('aria-pressed', 'false'); ui.camera.setAttribute('aria-pressed', 'false');
   controls();
 }
@@ -50,13 +52,13 @@ async function matched(message) {
     if (pc.connectionState === 'connected') {
       clearTimeout(timer); status('Connected', '', 'CONNECTED');
     } else if (pc.connectionState === 'failed') {
-      fail('Your networks could not establish a direct connection. Try Next.');
+      fail('Your networks could not establish a direct connection. Try Skip.');
     } else if (pc.connectionState === 'disconnected') {
       status('Connection interrupted…', 'Trying to reconnect.', 'CONNECTING');
-      clearTimeout(timer); timer = setTimeout(() => { if (peer === pc) fail('Connection lost. Try Next.'); }, 10000);
+      clearTimeout(timer); timer = setTimeout(() => { if (peer === pc) fail('Connection lost. Try Skip.'); }, 10000);
     }
   };
-  timer = setTimeout(() => { if (peer === pc) fail('No direct route was found within 15 seconds. Try Next.'); }, 15000);
+  timer = setTimeout(() => { if (peer === pc) fail('No direct route was found within 15 seconds. Try Skip.'); }, 15000);
   if (message.initiator) {
     await pc.setLocalDescription(await pc.createOffer());
     signal({type:pc.localDescription.type, sdp:pc.localDescription.sdp});
@@ -88,8 +90,8 @@ async function receive(message) {
   }
 }
 ui.start.onclick = async () => {
-  if (!ui.consent.checked) { status('Confirm you’re 18 or older.', 'Check the box below to join this private test.'); return; }
-  if (!navigator.mediaDevices?.getUserMedia) { status('Camera access needs a secure connection.', 'Open this site over HTTPS or localhost.'); return; }
+  if (!ageConfirmed) { ageGate.showModal(); return; }
+  if (!navigator.mediaDevices?.getUserMedia) { status('Camera access needs a secure connection.', 'Open this site over HTTPS or localhost.', 'ERROR'); return; }
   const run = ++generation; active = true; controls();
   status('Let’s get your camera ready.', 'Allow camera and microphone access in your browser.', 'STARTING');
   try {
@@ -97,24 +99,40 @@ ui.start.onclick = async () => {
     if (run !== generation) { media.getTracks().forEach(track => track.stop()); return; }
     stream = media; ui.local.srcObject = media; controls();
     const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`); socket = ws;
-    const timeout = setTimeout(() => { if (socket === ws && ws.readyState !== WebSocket.OPEN) { stop(); status('Server unavailable.', 'Try starting again.'); } }, 10000);
+    const timeout = setTimeout(() => { if (socket === ws && ws.readyState !== WebSocket.OPEN) { stop(); status('Server unavailable.', 'Try starting again.', 'ERROR'); } }, 10000);
     ws.onopen = () => { clearTimeout(timeout); if (run !== generation) return; send({type:'join'}); controls(); };
     let chain = Promise.resolve();
     ws.onmessage = event => {
       chain = chain.then(() => { if (run === generation) return receive(JSON.parse(event.data)); }).catch(() => {
-        if (run === generation && peer) fail('Connection setup failed. Try Next.');
+        if (run === generation && peer) fail('Connection setup failed. Try Skip.');
       });
     };
-    ws.onclose = () => { clearTimeout(timeout); if (run !== generation) return; stop(); status('Disconnected from the server.', 'Start again to reconnect.'); };
+    ws.onclose = () => { clearTimeout(timeout); if (run !== generation) return; stop(); status('Disconnected from the server.', 'Start again to reconnect.', 'ERROR'); };
   } catch (error) {
     if (run !== generation) return;
-    stop(); status('Couldn’t open your camera.', error.name === 'NotAllowedError' ? 'Allow camera and microphone permissions, then try again.' : 'Check that your camera and microphone are available.');
+    stop(); status('Couldn’t open your camera.', error.name === 'NotAllowedError' ? 'Allow camera and microphone permissions, then try again.' : 'Check that your camera and microphone are available.', 'ERROR');
   }
 };
 ui.next.onclick = () => { send({type:'next', matchId}); closePeer(); status('Looking for someone new…', 'Waiting for another available person.', 'WAITING'); };
 ui.stop.onclick = () => { stop(); status('You’re off camera.', 'Start again whenever you feel like it.'); };
-for (const [id, kind, off, on] of [['mic','audio','Mute mic','Unmute mic'],['camera','video','Camera off','Camera on']]) {
-  ui[id].onclick = () => { const tracks = kind === 'audio' ? stream?.getAudioTracks() : stream?.getVideoTracks(); if (!tracks?.length) return; const enabled = !tracks[0].enabled; tracks.forEach(t => t.enabled = enabled); ui[id].textContent = enabled ? off : on; ui[id].setAttribute('aria-pressed', String(!enabled)); };
+for (const [id, kind, off, on] of [['mic','audio','Mute microphone','Unmute microphone'],['camera','video','Turn camera off','Turn camera on']]) {
+  ui[id].onclick = () => { const tracks = kind === 'audio' ? stream?.getAudioTracks() : stream?.getVideoTracks(); if (!tracks?.length) return; const enabled = !tracks[0].enabled; tracks.forEach(t => t.enabled = enabled); ui[id].setAttribute('aria-label', enabled ? off : on); ui[id].title = enabled ? off : on; ui[id].setAttribute('aria-pressed', String(!enabled)); };
 }
 ui.play.onclick = () => ui.remote.play().then(() => { ui.play.hidden = true; }).catch(() => {});
 window.addEventListener('pagehide', stop);
+
+// Remember only the age declaration; never start media automatically.
+const ageGate = $('age-gate');
+let ageConfirmed = document.cookie.split(';').some(cookie => cookie.trim() === 'cruze_adult=1');
+ageGate.addEventListener('cancel', event => event.preventDefault());
+$('confirm-age').onclick = () => {
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `cruze_adult=1; Max-Age=31536000; Path=/; SameSite=Lax${secure}`;
+  ageConfirmed = true;
+  ageGate.close();
+  controls();
+  ui.start.focus();
+};
+$('leave').onclick = () => { stop(); location.replace('about:blank'); };
+controls();
+if (!ageConfirmed) ageGate.showModal();

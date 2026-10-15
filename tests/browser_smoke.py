@@ -1,5 +1,6 @@
 """Run manually: uv run python tests/browser_smoke.py (server must be running)."""
 import asyncio
+import time
 from playwright.async_api import async_playwright
 
 
@@ -22,11 +23,21 @@ async def main():
             page.on('pageerror', lambda error: errors.append(str(error)))
             await page.goto('http://127.0.0.1:8000/')
         a, b, c = pages
+        assert await a.locator('#age-gate').is_visible()
+        assert await a.locator('#start').is_disabled()
+        await a.keyboard.press('Escape')
+        assert await a.locator('#age-gate').is_visible()
+        await a.screenshot(path='/tmp/cruze-age-gate.png', full_page=True)
+        for page in pages:
+            await page.locator('#confirm-age').click()
+        cookie = next(c for c in await contexts[0].cookies() if c['name'] == 'cruze_adult')
+        assert abs(cookie['expires'] - time.time() - 31536000) < 60
+        assert cookie['sameSite'] == 'Lax'
+        await a.reload()
+        assert not await a.locator('#age-gate').is_visible()
+        assert await a.evaluate('stream == null')
         await a.screenshot(path='/tmp/cruze-desktop.png', full_page=True)
-        await a.locator('#start').click()
-        assert 'Confirm' in await a.locator('#status').inner_text()
         for page in (a, b):
-            await page.locator('#consent').check()
             await page.locator('#start').click()
         for page in (a, b):
             await wait_for(page, "document.getElementById('connection').textContent === 'CONNECTED'")
@@ -43,7 +54,6 @@ async def main():
         assert await a.evaluate('stream.getAudioTracks()[0].enabled') is False
         await a.locator('#camera').click()
         assert await a.evaluate('stream.getVideoTracks()[0].enabled') is False
-        await c.locator('#consent').check()
         await c.locator('#start').click()
         await wait_for(c, "document.getElementById('connection').textContent === 'WAITING'")
         await a.locator('#next').click()
@@ -61,12 +71,22 @@ async def main():
         await a.evaluate("rtcConfig.iceServers = []; rtcConfig.iceTransportPolicy = 'relay'")
         for page in (a, c):
             await page.locator('#start').click()
-        await wait_for(a, "document.getElementById('connection').textContent === 'CONNECTION FAILED'", timeout=22000)
-        assert await a.evaluate('peer === null')
+        # Either peer may time out first; its partner then returns to the queue.
+        async with asyncio.timeout(22):
+            while 'CONNECTION FAILED' not in [await page.locator('#connection').text_content() for page in (a, c)]:
+                await asyncio.sleep(.1)
+        for page in (a, c):
+            await wait_for(page, 'peer === null')
         for page in (a, c):
             await page.locator('#stop').click()
+        await contexts[0].clear_cookies()
+        await a.reload()
+        assert await a.locator('#age-gate').is_visible()
+        await a.locator('#leave').click()
+        assert a.url == 'about:blank'
+        assert not await contexts[0].cookies()
         assert not errors, errors
-        print('PASS: video, direct candidates, controls, skip, disconnect, camera cleanup, mobile layout, timeout; no browser errors.')
+        print('PASS: age popup, one-year cookie, returning visits, decline, video, direct candidates, controls, skip, disconnect, camera cleanup, mobile layout, timeout; no browser errors.')
         await browser.close()
 
 
