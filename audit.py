@@ -144,6 +144,18 @@ class Audit:
                 row['country'] = self.countries.lookup(row['ip'])
         return {'rows': rows, 'total': total, 'page': page, 'now': time.time()}
 
+    def country_totals(self):
+        # One browser per country across all retained visits, even after IP changes.
+        visitors = {}
+        addresses = {}
+        for row in self.db.execute('SELECT DISTINCT visitor, ip FROM visits'):
+            if row['ip'] not in addresses:
+                addresses[row['ip']] = self.countries.lookup(row['ip'])
+            country = addresses[row['ip']]
+            if country and row['visitor']:
+                visitors.setdefault(country, set()).add(row['visitor'])
+        return {code: len(ids) for code, ids in sorted(visitors.items())}
+
     def summary(self):
         return {key: self.db.execute(sql).fetchone()[0] for key, sql in {
             'visits': 'SELECT count(*) FROM visits',

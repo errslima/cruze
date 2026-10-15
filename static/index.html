@@ -3,11 +3,20 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Cruze</title>
-  <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+  <link rel="stylesheet" href="/style.css"><script src="/world.js" defer></script><script src="/app.js" defer></script>
 </head>
 <body>
   <main class="stage" aria-label="Video call">
     <video id="remote" autoplay playsinline></video>
+    <section id="world" aria-label="All-time visitor country map" aria-hidden="true">
+      <div class="world-content">
+        <p class="world-caption">Visitors worldwide <span>· all time</span></p>
+        <svg id="world-map" viewBox="0 0 1000 470" role="img" aria-label="Countries shaded by all-time unique visitors; brighter means more visitors"></svg>
+        <p id="world-note"></p>
+        <p class="world-wait"><span id="world-status">Finding someone</span><span class="world-dots" aria-hidden="true">…</span></p>
+      </div>
+      <p class="world-credit"><a href="https://db-ip.com" target="_blank" rel="noopener noreferrer">IP Geolocation by DB-IP</a></p>
+    </section>
     <div id="placeholder" data-state="OFFLINE" aria-hidden="true"><span class="indicator"></span></div>
     <div class="sr-only" role="status" aria-live="polite"><span id="status">Ready</span><span id="detail"></span><span id="connection">OFFLINE</span></div>
     <button id="play" class="play" aria-label="Play partner’s video" title="Play video" hidden>▶</button>

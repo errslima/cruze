@@ -29,6 +29,8 @@ function status(title, detail, label = 'OFFLINE') {
   ui.placeholder.dataset.state = label;
   ui.placeholder.title = `${title} ${detail}`;
   ui.placeholder.hidden = label === 'CONNECTED';
+  const waiting = ['WAITING', 'CONNECTING', 'STARTING'].includes(label) || (label === 'CONNECTED' && (ui.remote.readyState < 2 || ui.remote.paused));
+  window.cruzeWorld?.show(waiting, label === 'WAITING' ? 'Finding someone' : label === 'STARTING' ? 'Getting your camera ready' : 'Connecting');
 }
 function send(data) { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(data)); }
 function closePeer() {
@@ -198,7 +200,7 @@ async function playRemote() {
   }
 }
 ui.remote.addEventListener('playing', () => {
-  if (!ui.remote.paused) ui.play.hidden = true;
+  if (!ui.remote.paused) { ui.play.hidden = true; if (peer?.connectionState === 'connected') window.cruzeWorld?.show(false); }
 });
 ui.play.onclick = playRemote;
 window.addEventListener('pagehide', () => stop('page_closed'));

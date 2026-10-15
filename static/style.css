@@ -118,3 +118,24 @@ button.block { color: #ffb7bc; }
   .controls button.toggle { width: 34px; }
   #camera-select { width: 22px; }
 }
+
+/* The whole map stays in view, with call controls and self-preview above it. */
+#world { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, #1c251d 0%, #101514 52%, #101112 85%); opacity: 0; visibility: hidden; transition: opacity .45s ease, visibility .45s; pointer-events: none; }
+#world.is-visible { opacity: 1; visibility: visible; }
+.world-content { position: absolute; top: 47%; left: 50%; transform: translate(-50%, -50%); width: min(1100px, 92%); text-align: center; }
+.world-caption { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #c0cbb7; margin: 0 0 24px; }
+.world-caption span { color: #7e8c7d; }
+#world-map { display: block; width: 100%; height: auto; max-height: 53vh; fill: #242c29; stroke: #101714; stroke-width: .65; stroke-linejoin: round; }
+#world-map path { transition: fill 1s ease; }
+#world-map .visited { filter: drop-shadow(0 0 3px #b4e26b22); }
+#world-note { color: #778674; font-size: 11px; margin: 8px 0 24px; min-height: 14px; }
+.world-wait { font-size: clamp(18px, 2.2vw, 25px); font-weight: 500; letter-spacing: -.5px; margin: 0; color: #e5eddc; }
+.world-dots { display: inline-block; width: 1em; text-align: left; animation: world-pulse 1.8s ease-in-out infinite; }
+.world-credit { position: absolute; bottom: max(108px, calc(env(safe-area-inset-bottom) + 90px)); width: 100%; text-align: center; font-size: 10px; margin: 0; color: #677364; }
+.world-credit a { color: inherit; text-decoration: none; pointer-events: auto; }
+.world-credit a:hover { color: #bbcba9; }
+#placeholder[data-state="WAITING"] .indicator, #placeholder[data-state="CONNECTING"] .indicator, #placeholder[data-state="STARTING"] .indicator { display: none; }
+@keyframes world-pulse { 50% { opacity: .25; } }
+@media(max-width:600px) { .world-content { top: 54%; width: 96%; } .world-caption { font-size: 10px; margin-bottom: 18px; } #world-note { font-size: 10px; margin-bottom: 24px; } }
+@media(max-height:500px) { .world-content { top: 39%; width: 64%; } #world-map { max-height: 34vh; } .world-caption { margin-bottom: 4px; font-size: 9px; } #world-note { margin: 2px 0 8px; font-size: 9px; } .world-wait { font-size: 16px; } .world-credit { bottom: 92px; font-size: 9px; } }
+@media(prefers-reduced-motion:reduce) { #world, #world-map path { transition: none; } .world-dots { animation: none; } }
