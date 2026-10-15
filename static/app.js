@@ -44,8 +44,12 @@ async function matched(message) {
   pc.onicecandidate = event => { if (event.candidate) signal({type:'candidate', candidate:event.candidate.toJSON()}); };
   pc.ontrack = event => {
     if (peer !== pc) return;
-    ui.remote.srcObject = event.streams[0];
-    ui.remote.play().catch(() => { if (peer === pc) ui.play.hidden = false; });
+    const incoming = event.streams[0];
+    // Audio and video can announce the same stream separately. Reassigning
+    // srcObject interrupts pending playback, especially in Safari.
+    if (!incoming || ui.remote.srcObject === incoming) return;
+    ui.remote.srcObject = incoming;
+    playRemote();
   };
   pc.onconnectionstatechange = () => {
     if (peer !== pc) return;
@@ -118,7 +122,23 @@ ui.stop.onclick = () => { stop(); status('You’re off camera.', 'Start again wh
 for (const [id, kind, off, on] of [['mic','audio','Mute microphone','Unmute microphone'],['camera','video','Turn camera off','Turn camera on']]) {
   ui[id].onclick = () => { const tracks = kind === 'audio' ? stream?.getAudioTracks() : stream?.getVideoTracks(); if (!tracks?.length) return; const enabled = !tracks[0].enabled; tracks.forEach(t => t.enabled = enabled); ui[id].setAttribute('aria-label', enabled ? off : on); ui[id].title = enabled ? off : on; ui[id].setAttribute('aria-pressed', String(!enabled)); };
 }
-ui.play.onclick = () => ui.remote.play().then(() => { ui.play.hidden = true; }).catch(() => {});
+async function playRemote() {
+  const currentPeer = peer, source = ui.remote.srcObject;
+  if (!currentPeer || !source) return;
+  try {
+    await ui.remote.play();
+    if (peer === currentPeer && ui.remote.srcObject === source) ui.play.hidden = true;
+  } catch (error) {
+    if (peer !== currentPeer || ui.remote.srcObject !== source) return;
+    // An interrupted play() is not an autoplay-permission failure. Also
+    // ignore late failures after another attempt has already started video.
+    ui.play.hidden = error.name !== 'NotAllowedError' || !ui.remote.paused;
+  }
+}
+ui.remote.addEventListener('playing', () => {
+  if (!ui.remote.paused) ui.play.hidden = true;
+});
+ui.play.onclick = playRemote;
 window.addEventListener('pagehide', stop);
 
 // Remember only the age declaration; never start media automatically.
