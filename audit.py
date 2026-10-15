@@ -28,6 +28,11 @@ class Audit:
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL, actor TEXT,
                 match_id TEXT, kind TEXT);
+            CREATE TABLE IF NOT EXISTS diagnostics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, visit TEXT, at REAL,
+                kind TEXT, detail TEXT, match_id TEXT);
+            CREATE INDEX IF NOT EXISTS diagnostics_visit ON diagnostics(visit, at);
+            CREATE INDEX IF NOT EXISTS diagnostics_at ON diagnostics(at DESC);
             CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value REAL);
             CREATE INDEX IF NOT EXISTS visits_at ON visits(at DESC);
             CREATE INDEX IF NOT EXISTS sessions_visit ON sessions(visit);
@@ -117,6 +122,10 @@ class Audit:
                      FROM matches m LEFT JOIN sessions sa ON sa.id=m.a LEFT JOIN sessions sb ON sb.id=m.b
                      WHERE sa.ip LIKE ? OR sb.ip LIKE ? OR m.id LIKE ?'''
             order = 'matched DESC'
+        elif kind == 'diagnostics':
+            sql = '''SELECT d.*, v.ip, v.visitor FROM diagnostics d JOIN visits v ON v.id=d.visit
+                     WHERE v.ip LIKE ? OR d.visit LIKE ? OR v.visitor LIKE ?'''
+            order = 'at DESC, id DESC'
         elif kind == 'events':
             sql = '''SELECT e.*, s.ip FROM events e LEFT JOIN sessions s ON s.id=e.actor
                      WHERE coalesce(s.ip, '') LIKE ? OR coalesce(e.match_id, '') LIKE ? OR coalesce(e.actor, '') LIKE ?'''

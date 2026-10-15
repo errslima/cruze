@@ -21,7 +21,7 @@ async function load() {
       const card = document.createElement('div'), number = document.createElement('strong'), text = document.createElement('span');
       number.textContent = data.summary[key]; text.textContent = label; card.append(number, text); $('summary').append(card);
     }
-    const headings = selected === 'visits' ? ['Visited','IP address','Country','Browser / visitor','Chat sessions'] : selected === 'matches' ? ['Matched','Participants','Connected','Time connected','Match length','Ended','Ended by / reason'] : ['Time','Event','IP address','Country','Session / match'];
+    const headings = selected === 'visits' ? ['Visited','IP address','Country','Browser / visitor','Chat sessions','Diagnostics'] : selected === 'matches' ? ['Matched','Participants','Connected','Time connected','Match length','Ended','Ended by / reason'] : selected === 'diagnostics' ? ['Time','Step','IP address','Country','Details / visit'] : ['Time','Event','IP address','Country','Session / match'];
     const heading = document.createElement('tr');
     headings.forEach(value => { const th = document.createElement('th'); th.textContent = value; heading.append(th); });
     $('head').replaceChildren(heading); $('rows').replaceChildren();
@@ -31,6 +31,10 @@ async function load() {
         cell(row, date(entry.at)); cell(row, entry.ip); cell(row, entry.country);
         details(row, entry.agent || 'Unknown browser', [['Visitor ID',entry.visitor],['Visit ID',entry.id],['Referrer',entry.referrer]]);
         cell(row, entry.sessions);
+        const td = document.createElement('td'), button = document.createElement('button');
+        button.textContent = 'View trail'; button.className = 'secondary';
+        button.onclick = () => { kind = 'diagnostics'; page = 0; query = entry.id; $('query').value = query; document.querySelectorAll('[data-kind]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.kind === kind))); load(); };
+        td.append(button); row.append(td);
       } else if (selected === 'matches') {
         cell(row, date(entry.matched));
         details(row, `${entry.a_ip || 'Unknown'} (${entry.a_country || '—'}) ↔ ${entry.b_ip || 'Unknown'} (${entry.b_country || '—'})`, [['Match ID',entry.id],['A session',entry.a],['A visitor',entry.a_visitor],['B session',entry.b],['B visitor',entry.b_visitor]]);
@@ -39,6 +43,10 @@ async function load() {
         cell(row, duration((entry.ended || data.now) - entry.matched)); cell(row, entry.ended ? date(entry.ended) : 'Active');
         const actor = entry.ended_by === entry.a ? `A (${entry.a_ip})` : entry.ended_by === entry.b ? `B (${entry.b_ip})` : 'Server';
         cell(row, entry.ended ? `${actor} · ${entry.reason}` : '—');
+      } else if (selected === 'diagnostics') {
+        cell(row, date(entry.at)); cell(row, entry.kind.replaceAll('_', ' ')); cell(row, entry.ip); cell(row, entry.country);
+        const values = Object.entries(JSON.parse(entry.detail));
+        details(row, values.map(([k,v]) => `${k.replaceAll('_', ' ')}: ${v}`).join(' · ') || 'Details', [...values, ['Visit ID', entry.visit], ['Visitor ID', entry.visitor], ['Match ID', entry.match_id]]);
       } else {
         cell(row, date(entry.at)); cell(row, entry.kind); cell(row, entry.ip); cell(row, entry.country);
         details(row, entry.match_id || entry.actor || 'Server', [['Session',entry.actor],['Match',entry.match_id]]);

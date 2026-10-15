@@ -11,6 +11,7 @@ from urllib.parse import unquote
 
 from aiohttp import WSMsgType, web
 from audit import Audit
+from diagnostics import install_diagnostics
 from admin import install_admin
 
 BLOCK_COOKIE = "cruze_blocks"
@@ -181,6 +182,7 @@ def create_app(db_path=None):
     audit = Audit(db_path or os.getenv("CRUZE_DB", ":memory:"))
     lobby = Lobby(audit)
     install_admin(app, audit, client_ip)
+    install_diagnostics(app, audit)
     lock = asyncio.Lock()
 
     async def websocket(request):
