@@ -18,13 +18,17 @@
       <button id="block" class="block" disabled>Block</button>
       <button id="stop" class="stop" disabled>Stop</button>
       <span class="divider" aria-hidden="true"></span>
+      <div class="camera-controls">
       <button id="camera" class="toggle" disabled aria-pressed="false" aria-label="Turn camera off" title="Turn camera off">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="3"/><path d="m15 10 6-3v10l-6-3"/><path class="slash" d="M3 3 21 21"/></svg>
       </button>
+      <select id="camera-select" aria-label="Choose camera" title="Choose camera"><option value="">Default camera</option></select>
+      </div>
       <button id="mic" class="toggle" disabled aria-pressed="false" aria-label="Mute microphone" title="Mute microphone">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/><path class="slash" d="M3 3 21 21"/></svg>
       </button>
     </nav>
+    <p id="camera-error" role="alert" hidden></p>
   </main>
   <dialog id="block-dialog" aria-labelledby="block-title" aria-describedby="block-description">
     <h1 id="block-title">Block this user’s IP address?</h1>

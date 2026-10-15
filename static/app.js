@@ -4,6 +4,10 @@ const ui = Object.fromEntries(['local','remote','placeholder','status','detail',
 const rtcConfig = {iceServers: [{urls: 'stun:stun.l.google.com:19302'}]};
 let stream, socket, peer, matchId, timer, generation = 0, active = false;
 let pendingCandidates = [];
+const cameraSelect = $('camera-select');
+let preferredCamera = '';
+try { preferredCamera = localStorage.getItem('cruze_camera') || ''; } catch {}
+let switchingCamera = false;
 let peerIp = null, blockTarget = null;
 const blockDialog = $("block-dialog");
 function status(title, detail, label = 'OFFLINE') {
@@ -23,8 +27,10 @@ function controls() {
   ui.block.disabled = !active || !peerIp;
   ui.stop.disabled = !active; ui.mic.disabled = ui.camera.disabled = !stream;
   ui.start.disabled = !ageConfirmed;
+  cameraSelect.disabled = switchingCamera || (active && !stream);
 }
 function stop() {
+  $('camera-error').hidden = true;
   blockDialog.close(); blockTarget = null;
   generation++; active = false; send({type:'stop'}); closePeer();
   if (socket) { socket.onclose = null; socket.close(); socket = null; }
@@ -104,9 +110,10 @@ ui.start.onclick = async () => {
   const run = ++generation; active = true; controls();
   status('Let’s get your camera ready.', 'Allow camera and microphone access in your browser.', 'STARTING');
   try {
-    const media = await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720}},audio:true});
+    const media = await openCamera(preferredCamera, true);
     if (run !== generation) { media.getTracks().forEach(track => track.stop()); return; }
     stream = media; ui.local.srcObject = media; controls();
+    refreshCameras();
     const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`); socket = ws;
     const timeout = setTimeout(() => { if (socket === ws && ws.readyState !== WebSocket.OPEN) { stop(); status('Server unavailable.', 'Try starting again.', 'ERROR'); } }, 10000);
     ws.onopen = () => { clearTimeout(timeout); if (run !== generation) return; send({type:'join'}); controls(); };
@@ -200,3 +207,77 @@ $('confirm-block').onclick = () => {
   }
   blockTarget = null; blockDialog.close();
 };
+
+function cameraConstraints(deviceId) {
+  return {width: {ideal: 1280}, height: {ideal: 720}, ...(deviceId ? {deviceId: {exact: deviceId}} : {})};
+}
+async function openCamera(deviceId, audio) {
+  try {
+    return await navigator.mediaDevices.getUserMedia({video: cameraConstraints(deviceId), audio});
+  } catch (error) {
+    // A remembered unplugged camera should not prevent starting a new call.
+    if (!audio || !deviceId || !['NotFoundError', 'OverconstrainedError'].includes(error.name)) throw error;
+    return navigator.mediaDevices.getUserMedia({video: cameraConstraints(''), audio});
+  }
+}
+async function refreshCameras() {
+  if (!navigator.mediaDevices?.enumerateDevices) return;
+  try {
+    const devices = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'videoinput' && device.deviceId);
+    const selected = stream?.getVideoTracks()[0]?.getSettings().deviceId || preferredCamera;
+    cameraSelect.replaceChildren(new Option('Default camera', ''));
+    devices.forEach((device, index) => cameraSelect.add(new Option(device.label || `Camera ${index + 1}`, device.deviceId)));
+    cameraSelect.value = devices.some(device => device.deviceId === selected) ? selected : '';
+    controls();
+  } catch { /* Permissions or device lists may be unavailable until Start. */ }
+}
+function rememberCamera(deviceId) {
+  preferredCamera = deviceId;
+  try { localStorage.setItem('cruze_camera', deviceId); } catch {}
+}
+async function switchCamera(deviceId) {
+  if (switchingCamera) return;
+  if (!stream) { rememberCamera(deviceId); return; }
+  const run = generation, localStream = stream, oldTrack = stream.getVideoTracks()[0];
+  switchingCamera = true; controls(); $('camera-error').hidden = true;
+  let media, adopted = false;
+  try {
+    media = await openCamera(deviceId, false);
+    const track = media.getVideoTracks()[0];
+    if (!track) throw new Error('No video track');
+    if (run !== generation || stream !== localStream) return;
+    track.enabled = oldTrack?.enabled ?? true;
+    // If Skip changes the peer while replaceTrack is pending, update the new
+    // sender too before retiring the old track. The microphone stays intact.
+    while (peer) {
+      const currentPeer = peer;
+      const sender = currentPeer.getSenders().find(sender => sender.track?.kind === 'video');
+      if (sender) {
+        try { await sender.replaceTrack(track); }
+        catch (error) { if (peer === currentPeer) throw error; }
+      }
+      if (run !== generation || stream !== localStream) return;
+      if (peer === currentPeer) break;
+    }
+    // Respect toggles made while the camera was opening.
+    track.enabled = oldTrack?.enabled ?? true;
+    if (oldTrack) localStream.removeTrack(oldTrack);
+    localStream.addTrack(track);
+    ui.local.srcObject = localStream;
+    adopted = true;
+    oldTrack?.stop();
+    rememberCamera(deviceId);
+  } catch {
+    if (run === generation && stream === localStream) {
+      $('camera-error').textContent = 'Couldn’t switch cameras. Your previous camera is still selected.';
+      $('camera-error').hidden = false;
+    }
+  } finally {
+    if (!adopted) media?.getTracks().forEach(track => track.stop());
+    switchingCamera = false;
+    controls(); refreshCameras();
+  }
+}
+cameraSelect.onchange = () => switchCamera(cameraSelect.value);
+navigator.mediaDevices?.addEventListener('devicechange', refreshCameras);
+refreshCameras();
