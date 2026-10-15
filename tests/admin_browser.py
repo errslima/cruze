@@ -44,6 +44,8 @@ async def main():
                 assert await page.locator('#rows tr').count() == 100
                 assert await page.locator('#rows img').count() == 0
                 assert await page.get_by_role('columnheader', name='Country', exact=True).count() == 1
+                assert await page.get_by_role('columnheader', name='Estimated city / region', exact=True).count() == 1
+                assert await page.locator('#rows tr').first.locator('td').nth(3).inner_text() == 'Unknown'
                 assert await page.locator('#rows tr').first.locator('td').nth(2).inner_text() == '—'
                 await page.screenshot(path='/tmp/cruze-admin-desktop.png', full_page=True)
                 await page.locator('#next').click()

@@ -245,14 +245,14 @@ def create_app(db_path=None):
                 await lobby.pair()
         return ws
 
-    map_cache = {'expires': 0, 'countries': {}}
+    map_cache = {'expires': 0, 'points': []}
 
     async def visitor_map(request):
         now = time.monotonic()
         if now >= map_cache['expires']:
-            map_cache['countries'] = audit.country_totals()
+            map_cache['points'] = audit.visitor_points()
             map_cache['expires'] = now + 60
-        return web.json_response({'countries': map_cache['countries']}, headers={
+        return web.json_response({'points': map_cache['points']}, headers={
             'Cache-Control': 'public, max-age=60', 'X-Content-Type-Options': 'nosniff'})
 
     async def asset(request):

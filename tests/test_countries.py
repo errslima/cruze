@@ -40,3 +40,24 @@ def test_countries_include_historical_visits_matches_and_events(tmp_path, monkey
     assert next(e for e in events if e['actor'] == 'a')['country'] == 'US'
     assert next(e for e in events if e['actor'] is None)['country'] is None
     audit.close()
+
+
+def test_city_coordinates_and_missing_results(monkeypatch):
+    from countries import Cities
+    class Reader:
+        def get(self, ip):
+            return {'city': {'names': {'en':'Amsterdam'}}, 'subdivisions':[{'names':{'en':'North Holland'}}],
+                    'location': {'latitude':52.36761,'longitude':4.90414}}
+        def close(self):
+            pass
+    monkeypatch.setattr('countries.maxminddb.open_database', lambda path: Reader())
+    cities=Cities()
+    assert cities.lookup('8.8.8.8') == {'city':'Amsterdam','region':'North Holland','latitude':52.37,'longitude':4.9}
+    assert cities.lookup('::ffff:8.8.8.8')['city']=='Amsterdam'
+    for ip in ['127.0.0.1', 'invalid', None, '192.0.2.1']:
+        assert cities.lookup(ip)=={'city':None,'region':None,'latitude':None,'longitude':None}
+    cities.reader.get=lambda ip: {'location':{'latitude':12,'longitude':34}}
+    assert cities.lookup('8.8.8.8')['latitude'] is None  # Never use country centroids as cities.
+    cities.reader.get=lambda ip: {'city':{'names':{'en':'Example'}},'location':{'latitude':float('nan'),'longitude':34}}
+    assert cities.lookup('8.8.8.8')['latitude'] is None
+    cities.close()

@@ -13,6 +13,7 @@ fi
 sudo /srv/cruze/.venv/bin/pip install --require-hashes -r /srv/cruze/deploy/requirements.txt
 cd /srv/cruze
 sudo /srv/cruze/.venv/bin/python deploy/update-country.py
+sudo /srv/cruze/.venv/bin/python deploy/update-country.py --city
 sudo install -m 644 /srv/cruze/deploy/cruze.service /etc/systemd/system/cruze.service
 sudo systemctl daemon-reload
 sudo systemctl enable cruze

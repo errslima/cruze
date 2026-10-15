@@ -1,5 +1,6 @@
 let kind = 'visits', page = 0, query = '', requestId = 0;
 const $ = id => document.getElementById(id);
+const place = location => location?.city ? [location.city, location.region].filter(Boolean).join(', ') : location?.region ? `Unknown city · ${location.region}` : 'Unknown';
 const date = value => value ? new Date(value * 1000).toLocaleString() : '—';
 const duration = seconds => { const n = Math.max(0, Math.floor(seconds)); return `${Math.floor(n / 60)}m ${n % 60}s`; };
 function cell(row, value) { const td = document.createElement('td'); td.textContent = value ?? '—'; row.append(td); }
@@ -21,14 +22,14 @@ async function load() {
       const card = document.createElement('div'), number = document.createElement('strong'), text = document.createElement('span');
       number.textContent = data.summary[key]; text.textContent = label; card.append(number, text); $('summary').append(card);
     }
-    const headings = selected === 'visits' ? ['Visited','IP address','Country','Browser / visitor','Chat sessions','Diagnostics'] : selected === 'matches' ? ['Matched','Participants','Connected','Time connected','Match length','Ended','Ended by / reason'] : selected === 'diagnostics' ? ['Time','Step','IP address','Country','Details / visit'] : ['Time','Event','IP address','Country','Session / match'];
+    const headings = selected === 'visits' ? ['Visited','IP address','Country','Estimated city / region','Browser / visitor','Chat sessions','Diagnostics'] : selected === 'matches' ? ['Matched','Participants','Connected','Time connected','Match length','Ended','Ended by / reason'] : selected === 'diagnostics' ? ['Time','Step','IP address','Country','Estimated city / region','Details / visit'] : ['Time','Event','IP address','Country','Estimated city / region','Session / match'];
     const heading = document.createElement('tr');
     headings.forEach(value => { const th = document.createElement('th'); th.textContent = value; heading.append(th); });
     $('head').replaceChildren(heading); $('rows').replaceChildren();
     for (const entry of data.rows) {
       const row = document.createElement('tr');
       if (selected === 'visits') {
-        cell(row, date(entry.at)); cell(row, entry.ip); cell(row, entry.country);
+        cell(row, date(entry.at)); cell(row, entry.ip); cell(row, entry.country); cell(row, place(entry.location));
         details(row, entry.agent || 'Unknown browser', [['Visitor ID',entry.visitor],['Visit ID',entry.id],['Referrer',entry.referrer]]);
         cell(row, entry.sessions);
         const td = document.createElement('td'), button = document.createElement('button');
@@ -37,18 +38,18 @@ async function load() {
         td.append(button); row.append(td);
       } else if (selected === 'matches') {
         cell(row, date(entry.matched));
-        details(row, `${entry.a_ip || 'Unknown'} (${entry.a_country || '—'}) ↔ ${entry.b_ip || 'Unknown'} (${entry.b_country || '—'})`, [['Match ID',entry.id],['A session',entry.a],['A visitor',entry.a_visitor],['B session',entry.b],['B visitor',entry.b_visitor]]);
+        details(row, `${entry.a_ip || 'Unknown'} (${entry.a_country || '—'}) ↔ ${entry.b_ip || 'Unknown'} (${entry.b_country || '—'})`, [['A estimated city / region',place(entry.a_location)],['B estimated city / region',place(entry.b_location)],['Match ID',entry.id],['A session',entry.a],['A visitor',entry.a_visitor],['B session',entry.b],['B visitor',entry.b_visitor]]);
         cell(row, date(entry.connected));
         cell(row, entry.connected ? duration(entry.connected_seconds + (entry.connected_since ? data.now - entry.connected_since : 0)) : 'Not connected');
         cell(row, duration((entry.ended || data.now) - entry.matched)); cell(row, entry.ended ? date(entry.ended) : 'Active');
         const actor = entry.ended_by === entry.a ? `A (${entry.a_ip})` : entry.ended_by === entry.b ? `B (${entry.b_ip})` : 'Server';
         cell(row, entry.ended ? `${actor} · ${entry.reason}` : '—');
       } else if (selected === 'diagnostics') {
-        cell(row, date(entry.at)); cell(row, entry.kind.replaceAll('_', ' ')); cell(row, entry.ip); cell(row, entry.country);
+        cell(row, date(entry.at)); cell(row, entry.kind.replaceAll('_', ' ')); cell(row, entry.ip); cell(row, entry.country); cell(row, place(entry.location));
         const values = Object.entries(JSON.parse(entry.detail));
         details(row, values.map(([k,v]) => `${k.replaceAll('_', ' ')}: ${v}`).join(' · ') || 'Details', [...values, ['Visit ID', entry.visit], ['Visitor ID', entry.visitor], ['Match ID', entry.match_id]]);
       } else {
-        cell(row, date(entry.at)); cell(row, entry.kind); cell(row, entry.ip); cell(row, entry.country);
+        cell(row, date(entry.at)); cell(row, entry.kind); cell(row, entry.ip); cell(row, entry.country); cell(row, place(entry.location));
         details(row, entry.match_id || entry.actor || 'Server', [['Session',entry.actor],['Match',entry.match_id]]);
       }
       $('rows').append(row);

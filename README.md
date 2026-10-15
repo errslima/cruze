@@ -73,8 +73,14 @@ The admin Diagnostics tab and per-visit “View trail” show browser-reported p
 
 ## Waiting-screen visitor map
 
-The waiting screen displays all retained visit history as country heat, counting each browser visitor ID once per country even if it changes IP or refreshes. Clearing cookies creates a new ID; counts are browsers rather than verified people. Unknown IP locations are omitted. A logarithmic color scale keeps smaller visitor groups visible. The map fades out when remote video plays and returns while matchmaking. Reduced-motion preferences disable its animations.
+The waiting screen displays one soft dot per unique browser visitor ID across all retained visits, at its most recent resolvable city. Repeat visits and IP changes do not add extra dots; clearing cookies creates a new ID. Unknown cities are omitted. Overlapping dots at the same city use the equivalent combined opacity, keeping dense areas brighter without creating thousands of duplicate SVG elements. Nearby city glows also overlap. The map fades out when remote video plays and returns while matchmaking. Reduced-motion preferences disable its animations.
 
-`/api/visitor-map` is a public, 60-second-cached endpoint containing only country totals. IPs, visitor IDs, timestamps, and diagnostic details remain private. Countries are resolved locally using the current DB-IP database. Country boundaries in `static/world.json` are derived from public-domain [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/) data, projected to Equal Earth with `scripts/build-world.py`; very small territories may be omitted at this map scale. DB-IP attribution appears on the map. No third-party map scripts or services load in the browser.
+`/api/visitor-map` is a public, 60-second-cached endpoint containing only rounded estimated city coordinates and visitor counts. It does not expose IPs, visitor IDs, visit timestamps, or diagnostic details. The map uses the same Equal Earth projection for its dots and its public-domain [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/) boundaries. Very small territories may be omitted from the base map, but their city dots can still appear. No third-party map scripts or services load in the browser.
+
+## Estimated cities
+
+The admin visitor, event, diagnostic, and match logs include estimated cities and regions for both historical and new IP addresses. Run `uv run python deploy/update-country.py --city` to download the current monthly [DB-IP City Lite](https://db-ip.com/db/download/ip-to-city-lite) database, then restart the application. Deployments refresh both country and city databases. `CRUZE_CITY_DB` overrides `data/city.mmdb`. The database is excluded from Git; lookups run locally and do not send visitor IPs to an external API. Attribution for the CC BY 4.0 data appears in the admin page and on the public map.
+
+Cities are approximate IP estimates, not GPS or home addresses. VPNs and mobile networks may resolve elsewhere. Historical visits use the current database, not a verified location at visit time. Missing city results remain unknown; country-only coordinates are not plotted as cities. Coordinates are rounded to two decimal places, which reduces numeric precision without implying that the estimate is accurate to that distance.
 
 Map checks: `PYTHONPATH=. uv run python tests/world_browser.py`.

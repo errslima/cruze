@@ -2,7 +2,7 @@
 import sqlite3
 import time
 from pathlib import Path
-from countries import Countries
+from countries import Countries, Cities
 
 
 class Audit:
@@ -10,6 +10,7 @@ class Audit:
         if path != ':memory:':
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.countries = Countries()
+        self.cities = Cities()
         self.db = sqlite3.connect(path)
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA journal_mode=WAL')
@@ -138,23 +139,35 @@ class Audit:
         rows = [dict(row) for row in rows]
         for row in rows:
             if kind == 'matches':
+                row['a_location'] = self.cities.lookup(row['a_ip'])
+                row['b_location'] = self.cities.lookup(row['b_ip'])
                 row['a_country'] = self.countries.lookup(row['a_ip'])
                 row['b_country'] = self.countries.lookup(row['b_ip'])
             else:
+                row['location'] = self.cities.lookup(row['ip'])
                 row['country'] = self.countries.lookup(row['ip'])
         return {'rows': rows, 'total': total, 'page': page, 'now': time.time()}
 
-    def country_totals(self):
-        # One browser per country across all retained visits, even after IP changes.
-        visitors = {}
-        addresses = {}
-        for row in self.db.execute('SELECT DISTINCT visitor, ip FROM visits'):
-            if row['ip'] not in addresses:
-                addresses[row['ip']] = self.countries.lookup(row['ip'])
-            country = addresses[row['ip']]
-            if country and row['visitor']:
-                visitors.setdefault(country, set()).add(row['visitor'])
-        return {code: len(ids) for code, ids in sorted(visitors.items())}
+    def visitor_points(self):
+        # One dot per browser, at its most recent resolvable city in retained history.
+        # Publish only coordinate/count buckets, never identities or visit timestamps.
+        addresses, seen, points = {}, set(), {}
+        for row in self.db.execute('SELECT visitor, ip FROM visits ORDER BY at DESC, rowid DESC'):
+            visitor = row['visitor']
+            if not visitor or visitor in seen:
+                continue
+            ip = row['ip']
+            if ip not in addresses:
+                addresses[ip] = self.cities.lookup(ip)
+            location = addresses[ip]
+            lat, lon = location['latitude'], location['longitude']
+            if lat is None or lon is None:
+                continue
+            seen.add(visitor)
+            key = (lat, lon)
+            points[key] = points.get(key, 0) + 1
+        return [{'latitude': lat, 'longitude': lon, 'count': count}
+                for (lat, lon), count in sorted(points.items())]
 
     def summary(self):
         return {key: self.db.execute(sql).fetchone()[0] for key, sql in {
@@ -166,4 +179,5 @@ class Audit:
 
     def close(self):
         self.countries.close()
+        self.cities.close()
         self.db.close()

@@ -5,12 +5,16 @@ from pathlib import Path
 from aiohttp.test_utils import TestServer
 from playwright.async_api import async_playwright, expect
 from audit import Audit
-from countries import Countries
+from countries import Cities
 from server import create_app
 
 async def main():
-    original = Countries.lookup
-    Countries.lookup = lambda self, ip: {'nl':'NL','us':'US','br':'BR','au':'AU','jp':'JP'}.get(ip)
+    original = Cities.lookup
+    locations = {'nl':(52.37,4.9),'us':(40.71,-74),'br':(-23.55,-46.63),'au':(-33.87,151.21),'jp':(35.68,139.69)}
+    def lookup(self, ip):
+        lat,lon=locations.get(ip,(None,None))
+        return {'city':ip if lat is not None else None,'region':None,'latitude':lat,'longitude':lon}
+    Cities.lookup = lookup
     try:
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory)/'audit.sqlite3')
@@ -34,13 +38,27 @@ async def main():
                     return page
                 a=await caller()
                 await expect(a.locator('#world')).to_have_class('is-visible')
-                await expect(a.locator('#world-map .visited')).to_have_count(5)
+                await expect(a.locator('#visitor-dots circle')).to_have_count(5)
                 assert await a.locator('#world-map path').count() > 150
-                assert await a.locator('[data-country=US]').evaluate('(el) => el.style.fill') != await a.locator('[data-country=AU]').evaluate('(el) => el.style.fill')
+                assert await a.locator('#visitor-dots circle').evaluate_all('(nodes) => nodes.reduce((sum, el) => sum + Number(el.dataset.visitors), 0)') == 137
+                assert await a.locator('#visitor-dots circle[data-visitors="100"]').count() == 1
                 await expect(a.locator('#connection')).to_have_text('WAITING')
                 await a.screenshot(path='/tmp/cruze-world-desktop.png', animations='disabled')
                 await a.set_viewport_size({'width':390,'height':844})
                 await a.screenshot(path='/tmp/cruze-world-mobile.png', animations='disabled')
+                # Dense overlap has higher alpha than sparse locations.
+                assert await a.locator('#world-map defs radialGradient').count() == 5
+                assert await a.evaluate('''() => {
+                    const alpha = count => {
+                        const circle = document.querySelector(`#visitor-dots circle[data-visitors="${count}"]`);
+                        const id = circle.getAttribute('fill').slice(5, -1);
+                        return Number(document.getElementById(id).children[12].getAttribute('stop-opacity'));
+                    };
+                    return alpha(100) > alpha(20) && alpha(20) > alpha(2);
+                }''')
+                await a.set_viewport_size({'width':844,'height':390})
+                await a.screenshot(path='/tmp/cruze-world-landscape.png', animations='disabled')
+                await a.set_viewport_size({'width':390,'height':844})
                 assert await a.evaluate('document.documentElement.scrollWidth <= innerWidth')
                 world=await a.locator('#world-map').bounding_box()
                 controls=await a.locator('.controls').bounding_box()
@@ -69,5 +87,5 @@ async def main():
                 await browser.close()
         print('PASS: map heat, desktop/mobile fit, P2P video transitions, stop/skip waiting, failed map fetch, reduced motion')
     finally:
-        Countries.lookup=original
+        Cities.lookup=original
 asyncio.run(main())

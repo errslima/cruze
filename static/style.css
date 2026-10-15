@@ -127,7 +127,7 @@ button.block { color: #ffb7bc; }
 .world-caption span { color: #7e8c7d; }
 #world-map { display: block; width: 100%; height: auto; max-height: 53vh; fill: #242c29; stroke: #101714; stroke-width: .65; stroke-linejoin: round; }
 #world-map path { transition: fill 1s ease; }
-#world-map .visited { filter: drop-shadow(0 0 3px #b4e26b22); }
+#visitor-dots { stroke: none; pointer-events: none; }
 #world-note { color: #778674; font-size: 11px; margin: 8px 0 24px; min-height: 14px; }
 .world-wait { font-size: clamp(18px, 2.2vw, 25px); font-weight: 500; letter-spacing: -.5px; margin: 0; color: #e5eddc; }
 .world-dots { display: inline-block; width: 1em; text-align: left; animation: world-pulse 1.8s ease-in-out infinite; }
