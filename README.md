@@ -50,9 +50,3 @@ This is a **private prototype, not a public adult platform**. The remembered 18+
 - `static/app.js` — camera lifecycle, WebRTC, UI state.
 - `static/index.html`, `static/style.css` — interface.
 - `tests/` — signaling integration and browser smoke tests.
-
-## 1f517 server deployment
-
-Cruze lives at `/srv/cruze` on `54.37.204.161`, with the `cruze` systemd service listening on `127.0.0.1:8774`. Caddy routes `cruze.cc` through `/etc/caddy/sites/cruze.caddy`, imported by its main configuration. The service uses an isolated dynamic user, a read-only filesystem, and restarts on failure or server reboot.
-
-Redeploy the working tree with `./deploy/deploy.sh`. It transfers only the server, static assets, and deployment files, installs hash-locked runtime dependencies, checks the backend, validates Caddy, and reloads the proxy. The main Caddyfile is backed up before modification. DNS requires an A record for `cruze.cc` pointing to `54.37.204.161` (DNS only); Caddy obtains and renews HTTPS certificates automatically.
