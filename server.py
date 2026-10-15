@@ -13,6 +13,7 @@ from aiohttp import WSMsgType, web
 from audit import Audit
 from diagnostics import install_diagnostics
 from admin import install_admin
+from chat import install_chat
 
 BLOCK_COOKIE = "cruze_blocks"
 YEAR_MS = 365 * 24 * 60 * 60 * 1000
@@ -181,7 +182,8 @@ def create_app(db_path=None):
     app = web.Application(client_max_size=65536)
     audit = Audit(db_path or os.getenv("CRUZE_DB", ":memory:"))
     lobby = Lobby(audit)
-    install_admin(app, audit, client_ip)
+    chat = install_chat(app, audit, client_ip, cookie_blocks, normalize_ip)
+    install_admin(app, audit, client_ip, chat.remove)
     install_diagnostics(app, audit)
     lock = asyncio.Lock()
 
@@ -257,7 +259,7 @@ def create_app(db_path=None):
 
     async def asset(request):
         name = request.match_info.get("name", "index.html")
-        if name not in ("index.html", "app.js", "style.css", "world.js", "world.json"):
+        if name not in ("index.html", "app.js", "lobby.js", "style.css", "world.js", "world.json"):
             raise web.HTTPNotFound()
         headers = {
             "Cache-Control": "no-cache",

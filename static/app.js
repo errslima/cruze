@@ -233,6 +233,7 @@ $('confirm-age').onclick = () => {
   document.cookie = `cruze_adult=1; Max-Age=31536000; Path=/; SameSite=Lax${secure}`;
   ageConfirmed = true;
   ageGate.close();
+  window.dispatchEvent(new Event('cruze:adult'));
   controls();
   ui.start.focus();
 };
@@ -273,6 +274,7 @@ $('confirm-block').onclick = () => {
   }
   diagnostic('blocked', {}, blockTarget.matchId);
   send({type: 'block', ...blockTarget});
+  window.cruzeLobby?.block(blockTarget.ip);
   // Keep the captured target if the partner skipped while the popup was open.
   if (peerIp === blockTarget.ip) {
     closePeer(); status('User blocked.', 'Looking for someone else.', 'WAITING');

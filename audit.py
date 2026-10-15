@@ -1,4 +1,4 @@
-"""Persistent metadata only: visits, signaling sessions and call lifecycle."""
+"""Persistent metadata: visits, signaling sessions, call lifecycle and lobby text."""
 import sqlite3
 import time
 from pathlib import Path
@@ -39,6 +39,9 @@ class Audit:
             CREATE INDEX IF NOT EXISTS sessions_visit ON sessions(visit);
             CREATE INDEX IF NOT EXISTS matches_at ON matches(matched DESC);
             CREATE INDEX IF NOT EXISTS events_at ON events(at DESC);
+            CREATE TABLE IF NOT EXISTS chat (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL, visitor TEXT, ip TEXT,
+                name TEXT, country TEXT, text TEXT, hidden INTEGER DEFAULT 0);
         ''')
         # After a crash, use the last heartbeat, not the later restart time.
         heartbeat = self.db.execute("SELECT value FROM metadata WHERE key='heartbeat'").fetchone()
@@ -111,6 +114,23 @@ class Audit:
         self.db.execute('UPDATE sessions SET ended=?, reason=? WHERE id=? AND ended IS NULL', (time.time(), reason, ident))
         self.event(ident, None, reason)
 
+    def chat(self, visitor, ip, name, country, text):
+        now = time.time()
+        cursor = self.db.execute('INSERT INTO chat(at, visitor, ip, name, country, text) VALUES (?, ?, ?, ?, ?, ?)',
+                                 (now, visitor, ip, name, country, text))
+        self.db.commit()
+        return {'id': cursor.lastrowid, 'at': now, 'visitor': visitor, 'ip': ip,
+                'name': name, 'country': country, 'text': text}
+
+    def chat_history(self, limit):
+        rows = self.db.execute('SELECT * FROM chat WHERE hidden=0 ORDER BY id DESC LIMIT ?', (limit,)).fetchall()
+        return [dict(row) for row in reversed(rows)]
+
+    def hide_chat(self, ident):
+        changed = self.db.execute('UPDATE chat SET hidden=1 WHERE id=? AND hidden=0', (ident,)).rowcount
+        self.db.commit()
+        return changed > 0
+
     def logs(self, kind, page, query):
         search = '%' + query[:200] + '%'
         if kind == 'visits':
@@ -130,6 +150,10 @@ class Audit:
         elif kind == 'events':
             sql = '''SELECT e.*, s.ip FROM events e LEFT JOIN sessions s ON s.id=e.actor
                      WHERE coalesce(s.ip, '') LIKE ? OR coalesce(e.match_id, '') LIKE ? OR coalesce(e.actor, '') LIKE ?'''
+            order = 'at DESC, id DESC'
+        elif kind == 'chat':
+            sql = '''SELECT * FROM chat WHERE coalesce(ip, '') LIKE ? OR coalesce(visitor, '') LIKE ?
+                     OR (name || ' ' || text) LIKE ?'''
             order = 'at DESC, id DESC'
         else:
             raise ValueError('Invalid log type')

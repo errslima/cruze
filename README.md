@@ -39,6 +39,7 @@ uv run python tests/block_browser.py
 uv run python tests/playback_regression.py
 uv run python tests/camera_browser.py
 uv run python tests/chime_browser.py
+uv run python tests/lobby_browser.py
 PYTHONPATH=. uv run python tests/admin_browser.py
 ```
 
@@ -55,9 +56,26 @@ This is a **private prototype, not a public adult platform**. The remembered 18+
 ## Files
 
 - `server.py` — static files, WebSocket protocol, queue and match lifecycle.
+- `chat.py`, `static/lobby.js` — text lobby.
 - `static/app.js` — camera lifecycle, WebRTC, UI state.
 - `static/index.html`, `static/style.css` — interface.
 - `tests/` — signaling integration and browser smoke tests.
+
+## Lobby chat
+
+A text-only lobby is shared by everyone with the page open, whether or not they have started a video call, so early visitors are not alone. It connects over `/lobby` only after the 18+ confirmation; the server also requires the `cruze_adult` cookie and the same origin as the video socket. The panel opens by default on wide screens and stays closed on phones until tapped. A dot on the closed button marks unread messages; the open or closed choice is remembered in this browser.
+
+- Names are assigned, not chosen: an adjective and animal derived from the browser visitor ID, so they stay the same across visits until cookies are cleared. A flag shows the estimated IP country when one is known.
+- Messages are plain text up to 300 characters. Line breaks, control characters and bidirectional overrides are collapsed to spaces, and the browser renders text literally.
+- Each IP address may send 5 messages per 10 seconds (kept across reconnects) and open 8 lobby connections.
+- The header shows how many browsers are in the lobby now; several tabs of one browser count once.
+- The last 50 messages are shown on arrival, stored in the same SQLite database as the activity log, with the sender's IP address and visitor ID. Clients never receive IPs or visitor IDs.
+- Video blocks also hide that IP address's lobby messages: saved blocks apply when the lobby connects, and a new block applies immediately to later messages.
+- The admin **Lobby chat** tab lists messages with sender IP and estimated location. **Remove** hides a message from the history and from every open lobby. Removed messages stay in the database, marked as removed.
+
+There is no automated content filtering; moderation is the admin Remove button.
+
+Lobby checks: `uv run python tests/lobby_browser.py`.
 
 ## Admin activity log
 

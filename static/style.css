@@ -133,3 +133,46 @@ button.block { color: #ffb7bc; }
 @media(max-width:600px) { .world-content { top: 54%; width: 96%; } }
 @media(max-height:500px) { .world-content { top: 39%; width: 64%; } #world-map { max-height: 34vh; } .world-wait { font-size: 16px; margin-top: 12px; } }
 @media(prefers-reduced-motion:reduce) { #world, #world-map path { transition: none; } .world-dots { animation: none; } }
+
+/* Lobby chat: left side, above the call controls. */
+.lobby-toggle {
+  position: absolute; top: max(20px, env(safe-area-inset-top)); left: max(20px, env(safe-area-inset-left));
+  width: 48px; padding: 0; border-color: #ffffff14; background: #202224dd; backdrop-filter: blur(16px);
+}
+.lobby-unread { position: absolute; top: 10px; right: 10px; width: 9px; height: 9px; border-radius: 50%; background: #d4fc71; }
+.lobby {
+  position: absolute; top: max(20px, env(safe-area-inset-top)); left: max(20px, env(safe-area-inset-left));
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + 88px); width: min(340px, calc(100% - 40px));
+  display: flex; flex-direction: column; border: 1px solid #ffffff14; border-radius: 18px;
+  background: #202224e6; backdrop-filter: blur(16px); box-shadow: 0 8px 36px #0004;
+}
+.lobby header { display: flex; align-items: center; justify-content: space-between; padding: 14px 12px 10px 18px; border-bottom: 1px solid #ffffff10; }
+.lobby h2 { margin: 0; font-size: 16px; letter-spacing: -.3px; }
+#lobby-count { font-size: 12px; color: #9ea1a4; }
+.lobby-close { width: 36px; height: 36px; padding: 0; border-radius: 10px; background: transparent; }
+.lobby-close svg { width: 18px; height: 18px; }
+#lobby-messages { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 6px 18px; list-style: none; }
+#lobby-messages li { padding: 7px 0; }
+.lobby-meta { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: #8d9093; }
+.lobby-meta strong { font-weight: 600; color: #e5eddc; }
+#lobby-messages li.mine .lobby-meta strong { color: #d4fc71; }
+#lobby-messages p { margin: 2px 0 0; font-size: 14px; line-height: 1.4; color: #eeefef; overflow-wrap: anywhere; }
+#lobby-empty { flex: 1; margin: 0; padding: 18px; font-size: 14px; line-height: 1.5; color: #9ea1a4; }
+#lobby-error { margin: 0 12px; padding: 9px 12px; border-radius: 10px; background: #593237; color: #ffdade; font-size: 13px; }
+#lobby-form { display: flex; gap: 8px; padding: 12px 12px 4px; }
+#lobby-input {
+  flex: 1; min-width: 0; height: 44px; padding: 0 14px; border: 1px solid #ffffff1a; border-radius: 12px;
+  font: 14px ui-sans-serif, system-ui, sans-serif; color: inherit; background: #151617;
+}
+#lobby-input:disabled { opacity: .5; }
+#lobby-form button { height: 44px; min-width: 0; padding: 0 16px; }
+#lobby-me { margin: 0; padding: 4px 14px 12px; font-size: 12px; color: #8d9093; }
+@media (max-width: 600px) {
+  .lobby-toggle { top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); }
+  .lobby {
+    top: auto; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right));
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 74px); width: auto; height: min(48%, 420px);
+  }
+  #lobby-input { font-size: 16px; }
+}
+#lobby-input:focus-visible { outline-offset: 1px; }

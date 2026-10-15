@@ -34,7 +34,7 @@ def check_password(password, encoded):
         return False
 
 
-def install_admin(app, audit, get_ip):
+def install_admin(app, audit, get_ip, remove_chat):
     sessions = {}
     failures = {}
     attempts = deque()
@@ -121,9 +121,22 @@ def install_admin(app, audit, get_ip):
         result['summary'] = audit.summary()
         return web.json_response(result, headers=HEADERS)
 
+    async def hide_chat(request):
+        require(request)
+        same_origin(request)
+        try:
+            ident = (await request.json()).get('id')
+            if type(ident) is not int:
+                raise ValueError
+        except (ValueError, AttributeError):
+            raise web.HTTPBadRequest(headers=HEADERS)
+        # Removes the message from the lobby history and every open lobby.
+        return web.json_response({'removed': await remove_chat(ident)}, headers=HEADERS)
+
     app.router.add_get('/admin', page)
     app.router.add_get('/admin/', page)
     app.router.add_get('/admin/assets/{name}', asset)
     app.router.add_post('/admin/login', login)
     app.router.add_post('/admin/logout', logout)
     app.router.add_get('/admin/api/logs', logs)
+    app.router.add_post('/admin/api/chat/hide', hide_chat)

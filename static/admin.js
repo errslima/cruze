@@ -22,7 +22,7 @@ async function load() {
       const card = document.createElement('div'), number = document.createElement('strong'), text = document.createElement('span');
       number.textContent = data.summary[key]; text.textContent = label; card.append(number, text); $('summary').append(card);
     }
-    const headings = selected === 'visits' ? ['Visited','IP address','Country','Estimated city / region','Browser / visitor','Chat sessions','Diagnostics'] : selected === 'matches' ? ['Matched','Participants','Connected','Time connected','Match length','Ended','Ended by / reason'] : selected === 'diagnostics' ? ['Time','Step','IP address','Country','Estimated city / region','Details / visit'] : ['Time','Event','IP address','Country','Estimated city / region','Session / match'];
+    const headings = selected === 'visits' ? ['Visited','IP address','Country','Estimated city / region','Browser / visitor','Chat sessions','Diagnostics'] : selected === 'matches' ? ['Matched','Participants','Connected','Time connected','Match length','Ended','Ended by / reason'] : selected === 'diagnostics' ? ['Time','Step','IP address','Country','Estimated city / region','Details / visit'] : selected === 'chat' ? ['Time','Name','Message','IP address','Country','Estimated city / region','Lobby'] : ['Time','Event','IP address','Country','Estimated city / region','Session / match'];
     const heading = document.createElement('tr');
     headings.forEach(value => { const th = document.createElement('th'); th.textContent = value; heading.append(th); });
     $('head').replaceChildren(heading); $('rows').replaceChildren();
@@ -48,6 +48,24 @@ async function load() {
         cell(row, date(entry.at)); cell(row, entry.kind.replaceAll('_', ' ')); cell(row, entry.ip); cell(row, entry.country); cell(row, place(entry.location));
         const values = Object.entries(JSON.parse(entry.detail));
         details(row, values.map(([k,v]) => `${k.replaceAll('_', ' ')}: ${v}`).join(' · ') || 'Details', [...values, ['Visit ID', entry.visit], ['Visitor ID', entry.visitor], ['Match ID', entry.match_id]]);
+      } else if (selected === 'chat') {
+        cell(row, date(entry.at)); details(row, entry.name, [['Visitor ID', entry.visitor], ['Message ID', entry.id]]);
+        cell(row, entry.text); cell(row, entry.ip); cell(row, entry.country); cell(row, place(entry.location));
+        const td = document.createElement('td');
+        if (entry.hidden) td.textContent = 'Removed';
+        else {
+          const button = document.createElement('button');
+          button.textContent = 'Remove'; button.className = 'secondary';
+          button.onclick = async () => {
+            if (!confirm('Remove this message from the lobby for everyone?')) return;
+            const response = await fetch('/admin/api/chat/hide', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: entry.id})});
+            if (response.status === 401) { location.replace('/admin'); return; }
+            if (!response.ok) { $('error').textContent = 'Could not remove the message.'; return; }
+            load();
+          };
+          td.append(button);
+        }
+        row.append(td);
       } else {
         cell(row, date(entry.at)); cell(row, entry.kind); cell(row, entry.ip); cell(row, entry.country); cell(row, place(entry.location));
         details(row, entry.match_id || entry.actor || 'Server', [['Session',entry.actor],['Match',entry.match_id]]);

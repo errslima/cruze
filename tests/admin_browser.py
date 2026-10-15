@@ -34,7 +34,15 @@ async def main():
                 page = await context.new_page()
                 errors = []
                 page.on('pageerror', lambda error: errors.append(str(error)))
-                page.on('dialog', lambda dialog: errors.append('Unexpected browser dialog'))
+                confirmations = []
+                async def dialog(dialog):
+                    if confirmations:
+                        confirmations.pop()
+                        await dialog.accept()
+                    else:
+                        errors.append('Unexpected browser dialog')
+                        await dialog.dismiss()
+                page.on('dialog', dialog)
                 await page.goto(url + '/admin')
                 assert await page.locator('#password').is_visible()
                 assert (await context.request.get(url + '/admin/api/logs')).status == 401
@@ -73,6 +81,21 @@ async def main():
                 await until(page, "document.getElementById('rows').textContent.includes('stop')")
                 assert 'Not connected' not in await page.locator('#rows').inner_text()
                 await page.screenshot(path='/tmp/cruze-admin-matches.png', full_page=True)
+                # Lobby messages are listed with their sender and can be removed for everyone.
+                caller = callers[0]
+                await until(caller, "!document.getElementById('lobby-input').disabled")
+                await caller.locator('#lobby-input').fill('<i>spam</i>')
+                await caller.locator('#lobby-input').press('Enter')
+                await until(caller, "document.querySelectorAll('#lobby-messages li').length === 1")
+                await page.locator('[data-kind=chat]').click()
+                await until(page, "document.getElementById('rows').textContent.includes('<i>spam</i>')")
+                assert await page.locator('#rows i').count() == 0
+                assert await page.get_by_role('columnheader', name='Message', exact=True).count() == 1
+                confirmations.append(True)
+                await page.locator('#rows button', has_text='Remove').click()
+                await until(page, "document.getElementById('rows').textContent.includes('Removed')")
+                await until(caller, "document.querySelectorAll('#lobby-messages li').length === 0")
+                assert not confirmations
                 await page.set_viewport_size({'width':390,'height':844})
                 await page.screenshot(path='/tmp/cruze-admin-mobile.png', full_page=True)
                 assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -81,7 +104,7 @@ async def main():
                 assert (await context.request.get(url + '/admin/api/logs')).status == 401
                 assert not errors, errors
                 await browser.close()
-    print('PASS: private dashboard, pagination, search, escaped visitor text, actual WebRTC timing, mobile layout, logout')
+    print('PASS: private dashboard, pagination, search, escaped visitor text, actual WebRTC timing, lobby chat removal, mobile layout, logout')
 
 
 asyncio.run(main())

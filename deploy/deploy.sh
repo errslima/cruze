@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 DEPLOY_HOST=${DEPLOY_HOST:-ubuntu@54.37.204.161}
 DEPLOY_KEY=${DEPLOY_KEY:-$HOME/.ssh/qoc_vps_ed25519}
-rsync -az -e "ssh -i $DEPLOY_KEY -o BatchMode=yes" --exclude .DS_Store server.py audit.py admin.py countries.py diagnostics.py static deploy "$DEPLOY_HOST:/tmp/cruze-deploy/"
+rsync -az -e "ssh -i $DEPLOY_KEY -o BatchMode=yes" --exclude .DS_Store server.py audit.py admin.py chat.py countries.py diagnostics.py static deploy "$DEPLOY_HOST:/tmp/cruze-deploy/"
 ssh -i "$DEPLOY_KEY" -o BatchMode=yes "$DEPLOY_HOST" 'bash -se' <<'REMOTE'
 sudo install -d -m 755 /srv/cruze
 sudo rsync -a --chown=root:root --chmod=D755,F644 /tmp/cruze-deploy/ /srv/cruze/

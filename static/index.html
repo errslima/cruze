@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Cruze</title>
-  <link rel="stylesheet" href="/style.css"><script src="/world.js" defer></script><script src="/app.js" defer></script>
+  <link rel="stylesheet" href="/style.css"><script src="/world.js" defer></script><script src="/app.js" defer></script><script src="/lobby.js" defer></script>
 </head>
 <body>
   <main class="stage" aria-label="Video call">
@@ -35,6 +35,26 @@
       </button>
     </nav>
     <p id="camera-error" role="alert" hidden></p>
+    <button id="lobby-toggle" class="lobby-toggle" aria-controls="lobby" aria-expanded="false" aria-label="Open lobby chat" title="Open lobby chat">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10l-5 4v-4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>
+      <span id="lobby-unread" class="lobby-unread" hidden></span>
+    </button>
+    <aside id="lobby" class="lobby" aria-labelledby="lobby-title" hidden>
+      <header>
+        <div><h2 id="lobby-title">Lobby</h2><span id="lobby-count">Connecting…</span></div>
+        <button id="lobby-close" class="lobby-close" aria-label="Close lobby chat" title="Close lobby chat">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+      <ol id="lobby-messages" role="log" aria-label="Lobby messages"></ol>
+      <p id="lobby-empty">No messages yet. Say hi! Everyone on Cruze can see the lobby.</p>
+      <p id="lobby-error" role="alert" hidden></p>
+      <form id="lobby-form">
+        <input id="lobby-input" maxlength="300" autocomplete="off" enterkeyhint="send" placeholder="Message everyone" aria-label="Message everyone in the lobby" disabled>
+        <button id="lobby-send" class="primary" disabled>Send</button>
+      </form>
+      <p id="lobby-me"></p>
+    </aside>
   </main>
   <dialog id="block-dialog" aria-labelledby="block-title" aria-describedby="block-description">
     <h1 id="block-title">Block this user’s IP address?</h1>
