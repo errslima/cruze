@@ -1,19 +1,14 @@
 """Playback races, using browser media elements with controlled play outcomes."""
 import asyncio
-from pathlib import Path
 from playwright.async_api import async_playwright
+from static_stub import serve
 
 
 async def main():
-    root = Path(__file__).resolve().parents[1]
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         page = await browser.new_page()
         # Serve working-tree assets without needing a live signaling server.
-        async def serve(route):
-            name = route.request.url.split('/')[-1] or 'index.html'
-            mime = {'index.html': 'text/html', 'app.js': 'text/javascript', 'style.css': 'text/css'}
-            await route.fulfill(path=root / 'static' / name, content_type=mime[name])
         await page.route('http://localhost:8001/**', serve)
         await page.goto('http://localhost:8001/')
         await page.evaluate('''async () => {

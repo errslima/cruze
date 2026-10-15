@@ -2,21 +2,16 @@
 import asyncio
 import json
 import time
-from pathlib import Path
 from urllib.parse import unquote
 from playwright.async_api import async_playwright
+from static_stub import serve
 
 
 async def main():
-    root = Path(__file__).resolve().parents[1]
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         context = await browser.new_context(viewport={'width': 390, 'height': 844})
         page = await context.new_page()
-        async def serve(route):
-            name = route.request.url.split('/')[-1] or 'index.html'
-            mime = {'index.html': 'text/html', 'app.js': 'text/javascript', 'style.css': 'text/css'}
-            await route.fulfill(path=root / 'static' / name, content_type=mime[name])
         await page.route('http://localhost:8001/**', serve)
         await page.goto('http://localhost:8001/')
         await page.locator('#confirm-age').click()

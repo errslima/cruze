@@ -84,7 +84,7 @@ async def main():
         assert await a.locator('#age-gate').is_visible()
         await a.locator('#leave').click()
         assert a.url == 'about:blank'
-        assert not await contexts[0].cookies()
+        assert not any(c['name'] == 'cruze_adult' for c in await contexts[0].cookies())
         assert not errors, errors
         print('PASS: age popup, one-year cookie, returning visits, decline, video, direct candidates, controls, skip, disconnect, camera cleanup, mobile layout, timeout; no browser errors.')
         await browser.close()

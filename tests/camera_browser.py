@@ -1,18 +1,13 @@
 """Exercise webcam selection with synthetic video tracks and a real RTP sender."""
 import asyncio
-from pathlib import Path
 from playwright.async_api import async_playwright
+from static_stub import serve
 
 
 async def main():
-    root = Path(__file__).resolve().parents[1]
     async with async_playwright() as p:
         browser = await p.chromium.launch()
         page = await browser.new_page(viewport={'width': 320, 'height': 720})
-        async def serve(route):
-            name = route.request.url.split('/')[-1] or 'index.html'
-            await route.fulfill(path=root / 'static' / name, content_type={
-                'index.html': 'text/html', 'app.js': 'text/javascript', 'style.css': 'text/css'}[name])
         await page.route('http://localhost:8001/**', serve)
         await page.goto('http://localhost:8001/')
         await page.locator('#confirm-age').click()
