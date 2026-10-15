@@ -2,12 +2,14 @@
 import sqlite3
 import time
 from pathlib import Path
+from countries import Countries
 
 
 class Audit:
     def __init__(self, path):
         if path != ':memory:':
             Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self.countries = Countries()
         self.db = sqlite3.connect(path)
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA journal_mode=WAL')
@@ -124,7 +126,14 @@ class Audit:
         args = (search, search, search)
         total = self.db.execute('SELECT count(*) FROM (' + sql + ')', args).fetchone()[0]
         rows = self.db.execute(sql + ' ORDER BY ' + order + ' LIMIT 100 OFFSET ?', (*args, page * 100)).fetchall()
-        return {'rows': [dict(row) for row in rows], 'total': total, 'page': page, 'now': time.time()}
+        rows = [dict(row) for row in rows]
+        for row in rows:
+            if kind == 'matches':
+                row['a_country'] = self.countries.lookup(row['a_ip'])
+                row['b_country'] = self.countries.lookup(row['b_ip'])
+            else:
+                row['country'] = self.countries.lookup(row['ip'])
+        return {'rows': rows, 'total': total, 'page': page, 'now': time.time()}
 
     def summary(self):
         return {key: self.db.execute(sql).fetchone()[0] for key, sql in {
@@ -135,4 +144,5 @@ class Audit:
         }.items()}
 
     def close(self):
+        self.countries.close()
         self.db.close()
