@@ -1,7 +1,6 @@
 /* City-coordinate counts only. No identities, IPs, or visit times reach this map. */
 (() => {
   const layer = document.getElementById('world'), svg = document.getElementById('world-map');
-  const note = document.getElementById('world-note');
   const ns = 'http://www.w3.org/2000/svg';
   function element(name, attributes = {}) {
     const node = document.createElementNS(ns, name);
@@ -62,18 +61,17 @@
       const {points} = await response.json();
       if (!Array.isArray(points)) throw new Error();
       renderDots(points);
-      note.textContent = points.length ? 'One soft dot per visitor · estimated cities' : 'No visitor cities available yet';
+      layer.dataset.mapState = 'ready';
       lastUpdate = Date.now();
     } catch {
-      note.textContent = 'Visitor map temporarily unavailable';
+      layer.dataset.mapState = 'unavailable';
     } finally { pending = false; }
   }
   window.cruzeWorld = {
-    show(show, message = 'Finding someone') {
+    show(show) {
       visible = show;
       layer.classList.toggle('is-visible', show);
       layer.setAttribute('aria-hidden', String(!show));
-      document.getElementById('world-status').textContent = message;
       if (show && !document.hidden) refresh();
     }
   };

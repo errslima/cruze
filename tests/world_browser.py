@@ -43,6 +43,8 @@ async def main():
                 assert await a.locator('#visitor-dots circle').evaluate_all('(nodes) => nodes.reduce((sum, el) => sum + Number(el.dataset.visitors), 0)') == 137
                 assert await a.locator('#visitor-dots circle[data-visitors="100"]').count() == 1
                 await expect(a.locator('#connection')).to_have_text('WAITING')
+                await expect(a.locator('#world')).to_have_text('Finding someone…')
+                assert await a.locator('#world a').count() == 0
                 await a.screenshot(path='/tmp/cruze-world-desktop.png', animations='disabled')
                 await a.set_viewport_size({'width':390,'height':844})
                 await a.screenshot(path='/tmp/cruze-world-mobile.png', animations='disabled')
@@ -80,7 +82,7 @@ async def main():
                 await page.goto(str(server.make_url('/')))
                 await page.locator('#confirm-age').click()
                 await page.locator('#start').click()
-                await expect(page.locator('#world-note')).to_have_text('Visitor map temporarily unavailable')
+                await expect(page.locator('#world')).to_have_attribute('data-map-state', 'unavailable')
                 await expect(page.locator('#connection')).to_have_text('WAITING')
                 assert await page.locator('.world-dots').evaluate('(el) => getComputedStyle(el).animationName') == 'none'
                 assert not errors, errors
