@@ -10,6 +10,8 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from aiohttp import WSMsgType, web
+from audit import Audit
+from admin import install_admin
 
 BLOCK_COOKIE = "cruze_blocks"
 YEAR_MS = 365 * 24 * 60 * 60 * 1000
@@ -50,7 +52,9 @@ STATIC = Path(__file__).parent / "static"
 
 
 class Lobby:
-    def __init__(self):
+    def __init__(self, audit=None):
+        self.audit = audit
+        self.closing = False
         self.clients = {}
         self.addresses = {}
         self.blocked = {}
@@ -65,6 +69,8 @@ class Lobby:
             await socket.send_json({"type": kind, **data})
 
     async def pair(self):
+        if self.closing:
+            return
         while True:
             # Never-skipped pairs rank first, then oldest skips. Iteration
             # order breaks ties in favor of users who have waited longest.
@@ -80,6 +86,8 @@ class Lobby:
             self.queue.remove(a)
             self.queue.remove(b)
             match = uuid.uuid4().hex
+            if self.audit:
+                self.audit.match(match, a, b)
             self.matches[a] = (b, match)
             self.matches[b] = (a, match)
             await self.send(a, "matched", matchId=match, initiator=True, peerIp=self.addresses.get(b))
@@ -91,12 +99,14 @@ class Lobby:
             await self.send(user, "waiting")
         await self.pair()
 
-    async def leave(self, user):
+    async def leave(self, user, reason="disconnect"):
         if user in self.queue:
             self.queue.remove(user)
         old = self.matches.pop(user, None)
         if old:
             peer, match = old
+            if self.audit:
+                self.audit.end_match(match, None if reason == "server_shutdown" else user, reason)
             self.matches.pop(peer, None)
             await self.send(peer, "peer-left", matchId=match)
             self.queue.append(peer)
@@ -106,6 +116,8 @@ class Lobby:
     async def message(self, user, data):
         kind = data.get("type")
         if kind == "join":
+            if self.audit and user not in self.queue and user not in self.matches:
+                self.audit.event(user, None, 'join_queue')
             await self.join(user)
         elif kind in ("next", "stop"):
             # Ignore delayed controls from an earlier pairing.
@@ -115,7 +127,12 @@ class Lobby:
             if kind == "next" and current:
                 self.skip_sequence += 1
                 self.skipped[frozenset((user, current[0]))] = self.skip_sequence
-            await self.leave(user)
+            reason = 'skip' if kind == 'next' else data.get('reason', 'stop')
+            if reason not in ('skip', 'stop', 'page_closed', 'connection_failed'):
+                reason = 'stop'
+            if self.audit and not current:
+                self.audit.event(user, None, reason)
+            await self.leave(user, reason)
             if kind == "next":
                 await self.join(user)
             else:
@@ -127,10 +144,16 @@ class Lobby:
             current = self.matches.get(user)
             # A late confirmation must not skip an unrelated new partner.
             if current and self.addresses.get(current[0]) == ip:
-                await self.leave(user)
+                await self.leave(user, 'block')
                 await self.join(user)
             else:
                 await self.pair()
+        elif kind == "connection":
+            current = self.matches.get(user)
+            state = data.get('state')
+            if current and data.get('matchId') == current[1] and state in ('connected', 'disconnected', 'failed'):
+                if self.audit:
+                    self.audit.connection(current[1], user, state)
         elif kind == "signal":
             current = self.matches.get(user)
             if not current or data.get("matchId") != current[1]:
@@ -153,9 +176,11 @@ class Lobby:
             raise ValueError("Unknown message")
 
 
-def create_app():
+def create_app(db_path=None):
     app = web.Application(client_max_size=65536)
-    lobby = Lobby()
+    audit = Audit(db_path or os.getenv("CRUZE_DB", ":memory:"))
+    lobby = Lobby(audit)
+    install_admin(app, audit, client_ip)
     lock = asyncio.Lock()
 
     async def websocket(request):
@@ -170,7 +195,10 @@ def create_app():
         lobby.clients[user] = ws
         lobby.addresses[user] = address
         lobby.blocked[user] = cookie_blocks(request.cookies.get(BLOCK_COOKIE, ""))
+        audit.session(user, request.query.get('visit', ''), request.cookies.get('cruze_visitor', ''), address,
+                      request.headers.get('User-Agent', ''))
         events, controls = deque(), deque()
+        end_reason = 'disconnect'
         try:
             async for message in ws:
                 if message.type != WSMsgType.TEXT:
@@ -180,6 +208,7 @@ def create_app():
                     events.popleft()
                 events.append(now)
                 if len(events) > 150:
+                    end_reason = "rate_limit"
                     await ws.close(code=1008, message=b"Too many messages")
                     break
                 try:
@@ -191,16 +220,20 @@ def create_app():
                             controls.popleft()
                         controls.append(now)
                         if len(controls) > 10:
+                            end_reason = "rate_limit"
                             await ws.close(code=1008, message=b"Too many skips")
                             break
                     async with lock:
                         await lobby.message(user, data)
                 except (ValueError, TypeError):
+                    end_reason = "invalid_message"
                     await ws.close(code=1008, message=b"Invalid message")
                     break
         finally:
             async with lock:
-                await lobby.leave(user)
+                reason = 'server_shutdown' if lobby.closing else end_reason
+                await lobby.leave(user, reason)
+                audit.end_session(user, reason)
                 lobby.clients.pop(user, None)
                 lobby.addresses.pop(user, None)
                 lobby.blocked.pop(user, None)
@@ -214,16 +247,56 @@ def create_app():
         name = request.match_info.get("name", "index.html")
         if name not in ("index.html", "app.js", "style.css"):
             raise web.HTTPNotFound()
-        return web.FileResponse(STATIC / name, headers={
+        headers = {
+            "Cache-Control": "no-cache",
             "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'",
             "X-Content-Type-Options": "nosniff",
             "Referrer-Policy": "no-referrer",
             "Permissions-Policy": "camera=(self), microphone=(self)",
-        })
+        }
+        if name == 'index.html':
+            visitor = request.cookies.get('cruze_visitor', '')
+            try:
+                visitor = uuid.UUID(visitor).hex
+            except ValueError:
+                visitor = uuid.uuid4().hex
+            visit = uuid.uuid4().hex
+            # Health probes use HEAD and do not count as visitors.
+            if request.method != 'HEAD':
+                audit.visit(visit, visitor, client_ip(request), request.headers.get('User-Agent', ''),
+                            request.headers.get('Referer', '').split('?')[0])
+            content = (STATIC / name).read_text().replace('</head>', f'<meta name="cruze-visit" content="{visit}"></head>')
+            headers['Cache-Control'] = 'no-store'
+            response = web.Response(text=content, content_type='text/html', headers=headers)
+            response.set_cookie('cruze_visitor', visitor, max_age=31536000, httponly=True,
+                                secure=os.getenv('CRUZE_ORIGIN', request.scheme).startswith('https'),
+                                samesite='Lax')
+            return response
+        return web.FileResponse(STATIC / name, headers=headers)
+
+    async def heartbeat():
+        while True:
+            audit.heartbeat()
+            await asyncio.sleep(10)
+
+    async def startup(app):
+        app[heartbeat_key] = asyncio.create_task(heartbeat())
 
     async def shutdown(app):
+        lobby.closing = True
+        for user in list(lobby.matches):
+            await lobby.leave(user, 'server_shutdown')
         await asyncio.gather(*(ws.close(code=1001) for ws in list(lobby.clients.values())))
 
+    async def cleanup(app):
+        app[heartbeat_key].cancel()
+        await asyncio.gather(app[heartbeat_key], return_exceptions=True)
+        audit.heartbeat()
+        audit.close()
+
+    heartbeat_key = web.AppKey('heartbeat', asyncio.Task)
+    app.on_startup.append(startup)
+    app.on_cleanup.append(cleanup)
     app.router.add_get("/ws", websocket)
     app.router.add_get("/", asset)
     app.router.add_get("/{name}", asset)
@@ -232,4 +305,4 @@ def create_app():
 
 
 if __name__ == "__main__":
-    web.run_app(create_app(), host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "8000")))
+    web.run_app(create_app(os.getenv("CRUZE_DB", "data/audit.sqlite3")), host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "8000")))

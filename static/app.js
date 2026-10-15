@@ -29,10 +29,10 @@ function controls() {
   ui.start.disabled = !ageConfirmed;
   cameraSelect.disabled = switchingCamera || (active && !stream);
 }
-function stop() {
+function stop(reason = "stop") {
   $('camera-error').hidden = true;
   blockDialog.close(); blockTarget = null;
-  generation++; active = false; send({type:'stop'}); closePeer();
+  generation++; active = false; send({type:'stop', reason}); closePeer();
   if (socket) { socket.onclose = null; socket.close(); socket = null; }
   stream?.getTracks().forEach(track => track.stop()); stream = null; ui.local.srcObject = null;
   ui.mic.setAttribute('aria-label', 'Mute microphone'); ui.mic.title = 'Mute microphone';
@@ -41,7 +41,7 @@ function stop() {
   controls();
 }
 function fail(message) {
-  send({type:'stop'}); closePeer();
+  send({type:'stop', reason:'connection_failed'}); closePeer();
   status('This connection couldn’t get through.', message, 'CONNECTION FAILED');
   controls();
 }
@@ -64,6 +64,7 @@ async function matched(message) {
   };
   pc.onconnectionstatechange = () => {
     if (peer !== pc) return;
+    if (['connected', 'disconnected', 'failed'].includes(pc.connectionState)) send({type:'connection', matchId:id, state:pc.connectionState});
     if (pc.connectionState === 'connected') {
       clearTimeout(timer); status('Connected', '', 'CONNECTED');
     } else if (pc.connectionState === 'failed') {
@@ -114,7 +115,7 @@ ui.start.onclick = async () => {
     if (run !== generation) { media.getTracks().forEach(track => track.stop()); return; }
     stream = media; ui.local.srcObject = media; controls();
     refreshCameras();
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`); socket = ws;
+    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws?visit=${encodeURIComponent(document.querySelector('meta[name=cruze-visit]')?.content || '')}`); socket = ws;
     const timeout = setTimeout(() => { if (socket === ws && ws.readyState !== WebSocket.OPEN) { stop(); status('Server unavailable.', 'Try starting again.', 'ERROR'); } }, 10000);
     ws.onopen = () => { clearTimeout(timeout); if (run !== generation) return; send({type:'join'}); controls(); };
     let chain = Promise.resolve();
@@ -151,7 +152,7 @@ ui.remote.addEventListener('playing', () => {
   if (!ui.remote.paused) ui.play.hidden = true;
 });
 ui.play.onclick = playRemote;
-window.addEventListener('pagehide', stop);
+window.addEventListener('pagehide', () => stop('page_closed'));
 
 // Remember only the age declaration; never start media automatically.
 const ageGate = $('age-gate');
